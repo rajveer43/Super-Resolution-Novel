@@ -6,7 +6,7 @@
 #   bash slurm/submit_all.sh --smoke          the 30-minute check on synthetic data (debug QOS)
 #   bash slurm/submit_all.sh --dry-run        print the sbatch commands, submit nothing
 #
-# Stages: jepa -> sr -----------------------------> eval -> sweep -> pack
+# Stages: jepa -> [tune] -> sr -----------------------------> eval -> sweep -> pack
 #             \-> downstream --------------------/
 #         baselines[one per model x factor] -----/
 # Finished stages are skipped (a .done_<stage> marker), so re-submitting after a failure or timeout is safe.
@@ -15,7 +15,7 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=common.sh
 source "$REPO/slurm/common.sh"
 
-STAGES=(jepa sr baselines downstream eval sweep)
+STAGES=(jepa tune sr baselines downstream eval sweep)
 FROM=jepa
 DRY=0
 SMOKE=0
@@ -66,7 +66,7 @@ echo "logs       : $LOGDIR"
 # ---- freeze the settings for the jobs ------------------------------------------------------------
 write_env() {
     local v
-    for v in REPO ROOT DATA_ROOT EXPERIMENT ACCOUNT QOS GPU_MEM CONFIG_NAME RUN_TAG RUN_DATE EXTRA_SET CFS_COPY; do
+    for v in REPO ROOT DATA_ROOT EXPERIMENT ACCOUNT QOS GPU_MEM CONFIG_NAME RUN_TAG RUN_DATE TUNE EXTRA_SET CFS_COPY; do
         printf 'export %s=%q\n' "$v" "${!v}"
     done
 }
@@ -134,12 +134,15 @@ setup_python > /dev/null 2>&1 || true
 n_bl=$(baseline_tasks | wc -l | tr -d ' ')
 [[ "$n_bl" =~ ^[0-9]+$ ]] || die "could not read the baseline list from $CONFIG (does 'python -c \"import calonsf\"' work?)"
 
-J="" S="" B="" D=""
+J="" T="" S="" B="" D=""
 if wanted jepa; then
     J=$(sub jepa "$TIME_JEPA" 01_jepa.slurm "")
 fi
+if wanted tune && [[ "${TUNE:-0}" == 1 ]]; then
+    T=$(sub tune "$TIME_TUNE" 01b_tune.slurm "$(dep "afterok:$J")")
+fi
 if wanted sr; then
-    S=$(sub sr "$TIME_SR" 02_sr.slurm "$(dep "afterok:$J")")
+    S=$(sub sr "$TIME_SR" 02_sr.slurm "$(dep "afterok:$J" "afterok:$T")")
 fi
 if wanted baselines && ((n_bl)); then
     # baselines do not need the JEPA encoder, so they start straight away and run in parallel

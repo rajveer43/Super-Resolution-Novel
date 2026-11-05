@@ -104,6 +104,13 @@ run_py() {
     shift
     local -a extra=()
     [[ -n "$EXTRA_SET" ]] && read -r -a extra <<< "$EXTRA_SET"
+    # stages that build CaloNSF (sr, eval, sweep) set USE_TUNED=1: the Optuna result, if any, wins over EXTRA_SET
+    local tuned="$(experiment_dir)/tune/best_overrides.txt"
+    if [[ "${USE_TUNED:-0}" == 1 && -f "$tuned" ]]; then
+        local line
+        while read -r line; do [[ -n "$line" ]] && extra+=("$line"); done < "$tuned"
+        echo "using tuned hyperparameters from $tuned"
+    fi
     local -a cmd=(python "scripts/$script" --config "$CONFIG" "$@"
                   -o "out_dir=$ROOT/runs" "exp_name=$EXPERIMENT" ${extra[@]+"${extra[@]}"})
     cd "$REPO"

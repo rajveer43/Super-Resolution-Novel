@@ -10,7 +10,7 @@ requires-python = ">=3.10"
 dependencies = ["torch>=2.2", "numpy", "scipy", "h5py", "pyyaml", "matplotlib", "scikit-learn", "scikit-image", "tqdm"]
 
 [project.optional-dependencies]
-dev = ["pytest", "torchdiffeq", "pyarrow", "pandas"]
+dev = ["pytest", "torchdiffeq", "pyarrow", "optuna", "pandas"]
 
 [tool.setuptools.packages.find]
 include = ["calonsf*"]

@@ -11,6 +11,7 @@ source "$RUN_ENV"
 source "$REPO/slurm/common.sh"
 load_settings
 setup_python
+USE_TUNED=1
 skip_if_done sr
 job_header "train_sr"
 run_py train_sr.py

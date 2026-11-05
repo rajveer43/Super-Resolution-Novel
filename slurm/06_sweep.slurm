@@ -12,6 +12,7 @@ source "$RUN_ENV"
 source "$REPO/slurm/common.sh"
 load_settings
 setup_python
+USE_TUNED=1
 skip_if_done sweep
 job_header "resolution_sweep"
 run_py resolution_sweep.py

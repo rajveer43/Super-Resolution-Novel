@@ -25,7 +25,7 @@ fi
 
 echo
 echo "---- finished stages"
-for m in jepa sr downstream eval sweep; do
+for m in jepa tune sr downstream eval sweep; do
     if [[ -f "$exp/.done_$m" ]]; then echo "done    $m  ($(cat "$exp/.done_$m"))"; else echo "-       $m"; fi
 done
 n_done=$(compgen -G "$exp/.done_baseline-*" | wc -l | tr -d ' ')
@@ -41,7 +41,7 @@ done
 
 echo
 echo "---- end of the latest log of each stage ($logdir)"
-for stage in jepa sr baselines downstream eval sweep smoke; do
+for stage in jepa tune sr baselines downstream eval sweep smoke; do
     # shellcheck disable=SC2012
     f="$(ls -t "$logdir/$stage"-*.out 2> /dev/null | head -1)"
     [[ -n "$f" ]] || continue
@@ -50,6 +50,7 @@ for stage in jepa sr baselines downstream eval sweep smoke; do
 done
 grep -l -i -E "traceback|error:|out of memory|DUE TO TIME LIMIT" "$logdir"/*.out 2> /dev/null \
     | sed 's/^/!! problem reported in /'
+[[ -f "$exp/tune/best_overrides.txt" ]] && echo && echo "tuned hyperparameters: $(paste -sd' ' "$exp/tune/best_overrides.txt")"
 [[ -f "$exp/eval/report.md" ]] && echo && echo "report: $exp/eval/report.md"
 compgen -G "$ROOT/results_${EXPERIMENT}*.tar.gz" > /dev/null && echo "packed: $(ls "$ROOT"/results_"${EXPERIMENT}"*.tar.gz)"
 exit 0

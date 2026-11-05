@@ -13,7 +13,7 @@ echo "pytorch module: $(module list 2>&1 | grep -o 'pytorch/[^ ]*' || echo '?')"
 python -c 'import torch; print("torch", torch.__version__)'
 
 missing=()
-for spec in numpy scipy h5py yaml:pyyaml matplotlib sklearn:scikit-learn skimage:scikit-image tqdm torchdiffeq pyarrow; do
+for spec in numpy scipy h5py yaml:pyyaml matplotlib sklearn:scikit-learn skimage:scikit-image tqdm torchdiffeq pyarrow optuna; do
     mod="${spec%%:*}"
     pkg="${spec#*:}"
     python -c "import $mod" 2> /dev/null || missing+=("$pkg")

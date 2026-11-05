@@ -107,6 +107,14 @@ downstream:
   batch_size: 64
   probe_epochs: 5
 
+tune:                       # Optuna study for the CaloNSF training hyperparameters (scripts/tune.py)
+  trials: 15                # total, including the default config (trial 0); hard cap 15
+  epochs: 2                 # short training per trial
+  steps_per_epoch: 500
+  val_events: 500           # scored on the validation split, never on test
+  nfe: 8
+  startup_trials: 5         # random trials before the TPE sampler takes over
+
 eval:
   n_events: 500
   batch_size: 8
