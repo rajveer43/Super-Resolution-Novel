@@ -1,0 +1,6 @@
+# Real-data preset for calochallenge (edit data.files in configs/data/calochallenge.yaml)
+_base_: [../base.yaml, ../data/calochallenge.yaml]
+exp_name: calochallenge
+data: {max_events: 50000}
+train: {epochs: 20}
+jepa: {epochs: 8}

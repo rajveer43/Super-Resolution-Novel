@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "calonsf"
+version = "0.1.0"
+description = "CaloNSF: resolution-invariant, physics-aware super-resolution for HEP calorimeter data"
+requires-python = ">=3.10"
+dependencies = ["torch>=2.2", "numpy", "scipy", "h5py", "pyyaml", "matplotlib", "scikit-learn", "scikit-image", "tqdm"]
+
+[project.optional-dependencies]
+dev = ["pytest", "torchdiffeq", "pyarrow", "pandas"]
+
+[tool.setuptools.packages.find]
+include = ["calonsf*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,124 @@
+# Base configuration. Dataset files in configs/data/*.yaml, experiment presets in configs/experiments/.
+seed: 42
+device: auto          # auto -> cuda, then mps (Apple GPU), then cpu
+out_dir: runs
+exp_name: default
+
+data:
+  name: qg
+  files: []
+  split: {train: 0.8, val: 0.1, test: 0.1}
+  max_events: null    # cap the number of events (laptop-friendly); null = all
+  lr_factors: [4]     # nominal LR factors; one is drawn per training batch (multi-ladder training)
+  factor_overrides: null
+  batch_size: 16
+  num_workers: 0
+  energy_scale: 1.0   # E_scale in log1p(E / E_scale)
+  noise:              # electronic noise on LR cells (Graph Denoising paper Sec. II)
+    enabled: false
+    sigma: {default: 0.0}
+    threshold_k: 2.0
+  preprocess:         # DiffLense LR preprocessing: median -> gaussian -> NLM -> threshold
+    enabled: false
+    median: true
+    gaussian_sigma: 0.5
+    nlm: true
+    nlm_h: 0.6
+    threshold_rel: 0.02
+
+model:
+  d_model: 128
+  heads: 4
+  enc_layers: 4
+  dec_layers: 4
+  mlp_ratio: 4
+  dropout: 0.0
+  window: 1024              # tokens per local-attention window (Morton order)
+  pos_encoding: rope        # rope | absolute (ablation)
+  rope: {max_freq: 256, periodic_max_freq: 64, depth_max_freq: 16}
+  abs_level_feature: true
+  max_children: 16
+  zero_token_frac: 0.02
+  max_enc_tokens: 2048
+  max_enc_tokens_eval: 8192
+  max_parents_train: 3072
+  generator: flow           # flow | regression (ablation)
+  ladder: next_scale        # next_scale | one_shot (ablation)
+  conservation: true        # energy-conserving child split (ablation: false)
+  use_occupancy: true
+  occ_threshold: 0.5
+  denoise_head: auto        # auto -> on iff noise or preprocessing is enabled
+  denoise_threshold: 0.0
+  flow: {mixer_layers: 1, y_std: 3.0, eps: 1.0e-4, sigma_min: 1.0e-4, nfe: 16, solver: midpoint}
+  conditioning: {incident_energy: false, particle: false, e_min: 1.0, e_max: 100.0}
+
+loss:
+  occ: 1.0
+  denoise: 1.0
+  profile: 0.5
+  jepa: 0.05
+  jepa_max_parents: 256
+
+jepa:
+  epochs: 5
+  lr: 5.0e-4
+  batch_size: 16
+  ema: [0.996, 1.0]
+  n_blocks: 4
+  block_scale: [0.1, 0.3]
+  cross_scale: true
+  cross_weight: 1.0
+  max_hr_tokens: 2048
+  n_hr_queries: 256
+  d_pred: 96
+  pred_heads: 4
+  pred_layers: 3
+  progressive_factors: null   # e.g. [[8], [4, 8]]: coarse factors first, finer ones later (V-JEPA 2)
+
+train:
+  epochs: 10
+  lr: 3.0e-4
+  weight_decay: 0.05
+  warmup_frac: 0.05
+  schedule: cosine          # cosine | wcd (warmup-constant-decay)
+  grad_clip: 1.0
+  max_steps_per_epoch: null
+  freeze_encoder_epochs: 1
+  encoder_lr_mult: 0.2
+  log_every: 20
+  pretrained_encoder: auto  # auto -> runs/<exp>/jepa/encoder.pt if it exists; null to disable
+
+baseline:
+  epochs: 10
+  lr: 3.0e-4
+  channels: 48
+  blocks: 6
+  project_energy: true      # rescale output so each LR cell's children sum to the LR cell
+  ddpm_steps: 1000
+  ddpm_sample_steps: 50
+  graphfm_nfe: 16
+  vq_codebook: 256
+  vq_dim: 32
+  vq_stage1_frac: 0.5
+
+downstream:
+  epochs: 8
+  lr: 1.0e-3
+  batch_size: 64
+  probe_epochs: 5
+
+eval:
+  n_events: 500
+  batch_size: 8
+  ensemble: 4
+  nfe: 16
+  solver: midpoint
+  lr_factors: [4]
+  baselines: [nearest, bicubic, edsr, rcan, swinir, liif, ddpm, graphfm, varvq]
+  n_examples: 4
+  sweep_extra_steps: [0, 1, 2, 3, 4]
+  sweep_events: 4
+
+analysis:
+  energy_bins: null
+  class_names: null

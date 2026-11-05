@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Virtual environment
+.venv/
+venv/
+
+# Datasets (multi-GB HDF5 files; see README for download locations)
+data/
+*.h5
+*.hdf5
+*.parquet
+
+# Experiment outputs: checkpoints, logs, figures
+runs/
+*.pt
+*.pth
+*.ckpt
+*.log
+nohup.out
+
+# Editors and OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
+
+
+docs/

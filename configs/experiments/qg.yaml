@@ -1,0 +1,6 @@
+# Real-data preset for qg (edit data.files in configs/data/qg.yaml)
+_base_: [../base.yaml, ../data/qg.yaml]
+exp_name: qg
+data: {max_events: 50000}
+train: {epochs: 20}
+jepa: {epochs: 8}

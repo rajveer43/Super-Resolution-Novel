@@ -1,0 +1,6 @@
+# Real-data preset for calogan (edit data.files in configs/data/calogan.yaml)
+_base_: [../base.yaml, ../data/calogan.yaml]
+exp_name: calogan
+data: {max_events: 50000}
+train: {epochs: 20}
+jepa: {epochs: 8}

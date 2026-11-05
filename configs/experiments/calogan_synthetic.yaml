@@ -1,0 +1,10 @@
+# Laptop smoke run on synthetic data in the real file schema (scripts/make_synthetic.py)
+_base_: [../base.yaml, ../data/calogan.yaml]
+exp_name: calogan_synthetic
+data:
+  files: {eplus: data/synthetic/eplus.hdf5, gamma: data/synthetic/gamma.hdf5, piplus: data/synthetic/piplus.hdf5}
+train: {epochs: 3, max_steps_per_epoch: 60}
+jepa: {epochs: 2}
+baseline: {epochs: 2}
+downstream: {epochs: 4, probe_epochs: 3}
+eval: {n_events: 96, ensemble: 2, nfe: 8, sweep_events: 2}

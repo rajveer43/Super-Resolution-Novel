@@ -1,0 +1,4 @@
+_base_: [calochallenge.yaml]
+exp_name: calochallenge_noisy
+data:
+  noise: {enabled: true, sigma: {default: 2.0}, threshold_k: 2.0}

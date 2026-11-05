@@ -1,0 +1,9 @@
+# Laptop smoke run on synthetic data in the real file schema (scripts/make_synthetic.py)
+_base_: [../base.yaml, ../data/calochallenge.yaml]
+exp_name: calochallenge_synthetic
+data: {files: [data/synthetic/dataset_2_1.hdf5, data/synthetic/dataset_2_2.hdf5]}
+train: {epochs: 3, max_steps_per_epoch: 60}
+jepa: {epochs: 2}
+baseline: {epochs: 2}
+downstream: {epochs: 4, probe_epochs: 3}
+eval: {n_events: 96, ensemble: 2, nfe: 8, sweep_events: 2}

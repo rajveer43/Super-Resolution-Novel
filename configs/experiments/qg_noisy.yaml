@@ -1,0 +1,6 @@
+# Noisy-LR setting with DiffLense preprocessing and the learned LR denoising head
+_base_: [qg.yaml]
+exp_name: qg_noisy
+data:
+  noise: {enabled: true, sigma: {jet: 0.02}, threshold_k: 2.0}
+  preprocess: {enabled: true}
