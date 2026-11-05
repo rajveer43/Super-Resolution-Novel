@@ -65,10 +65,13 @@ datasets, so the real readers get exercised. Its physics is only qualitative. Ne
 | Dataset | Put files at (or edit `configs/data/*.yaml`) | Notes |
 |---|---|---|
 | Quark–Gluon (CMS Open Data / ML4SCI) | `data/real/qg/quark-gluon.h5` with `X_jets`, `y`, `pt`, `m0` | Parquet: `scripts/convert_qg_parquet.py --out data/real/qg/quark-gluon.h5 *.parquet`. 125×125 is zero-padded to 128. |
-| CaloChallenge DS2 (Zenodo record 6366271 — verify) | `data/real/calochallenge_v2/dataset_2_{1,2}.hdf5` | File 2 is the official evaluation set. Run `scripts/check_data.py` to verify the voxel flatten order (`data.flatten_order`), and set `data.r_edges` from the official binning XML for physical radii. |
+| CaloChallenge DS2 (Zenodo record 6366271) | `data/real/calochallenge_v2/dataset_2_{1,2}.hdf5` | File 2 is the official evaluation set. Run `scripts/check_data.py` to verify the voxel flatten order (`data.flatten_order`), and set `data.r_edges` from the official binning XML for physical radii. |
 | CaloGAN (Mendeley Data "Electromagnetic Calorimeter Shower Images") | `data/real/calogan/{eplus,gamma,piplus}.hdf5` | energy in GeV, deposits in MeV; asserted at load. |
 
+Download all three from their official hosts (resumable, checksums verified, QG converted to HDF5):
+
 ```bash
+.venv/bin/python scripts/download_data.py                     # or --dataset calogan|calochallenge|qg
 .venv/bin/python scripts/check_data.py --config configs/experiments/calochallenge.yaml
 bash scripts/run_all.sh configs/experiments/qg.yaml            # pretrain → SR → baselines → downstream → eval → sweep
 bash scripts/run_all.sh configs/experiments/qg_noisy.yaml      # noisy LR + DiffLense preprocessing + denoise head
@@ -80,6 +83,9 @@ Override any setting from the command line: `-o train.epochs=30 model.d_model=19
 
 Mac notes: `PYTORCH_ENABLE_MPS_FALLBACK=1` is set automatically. Defaults are sized for an M-series laptop
 (d_model 128, 4+4 layers, ~3.2 M trainable parameters). On a CUDA box, raise `model.d_model`, layers and `data.batch_size`.
+
+NERSC Perlmutter: see `slurm/` (`setup_env.sh` once, `download_data.sh`, then `submit_all.sh --smoke` and `submit_all.sh`;
+settings in `slurm/settings.sh`).
 
 ## Pipeline stages and outputs (`runs/<exp_name>/`)
 
