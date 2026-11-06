@@ -86,20 +86,23 @@ def probe_metrics(geom, out, meta, cfg) -> dict:
 def classifier_test(feats_gt: np.ndarray, feats_pred: np.ndarray, seed: int = 0) -> float:
     """CaloChallenge-style classifier test: AUC of a classifier separating GT from SR on held-out data.
     0.5 = indistinguishable (best), 1.0 = trivially separable."""
+    # feats_gt[i] and feats_pred[i] are the same event, so split by EVENT: a GT event in the training half
+    # with its own SR copy in the test half (opposite labels, nearly equal features) would pull the AUC to 0.5
     n = min(len(feats_gt), len(feats_pred))
     rng = np.random.default_rng(seed)
-    X = np.concatenate([feats_gt[:n], feats_pred[:n]])
-    y = np.concatenate([np.zeros(n), np.ones(n)])
-    X = np.nan_to_num(X)
-    perm = rng.permutation(2 * n)
-    X, y = X[perm], y[perm]
-    h = n
-    clf = HistGradientBoostingClassifier(max_iter=200, learning_rate=0.1, random_state=seed)
-    clf.fit(X[:h], y[:h])
-    p = clf.predict_proba(X[h:])[:, 1]
-    if len(np.unique(y[h:])) < 2:
+    ev = rng.permutation(n)
+    tr, te = ev[: n // 2], ev[n // 2:]
+    fg, fp = np.nan_to_num(feats_gt[:n]), np.nan_to_num(feats_pred[:n])
+    Xtr = np.concatenate([fg[tr], fp[tr]])
+    ytr = np.concatenate([np.zeros(len(tr)), np.ones(len(tr))])
+    Xte = np.concatenate([fg[te], fp[te]])
+    yte = np.concatenate([np.zeros(len(te)), np.ones(len(te))])
+    if len(tr) < 2 or len(te) < 1:
         return float("nan")
-    auc = roc_auc_score(y[h:], p)
+    clf = HistGradientBoostingClassifier(max_iter=200, learning_rate=0.1, random_state=seed)
+    clf.fit(Xtr, ytr)
+    p = clf.predict_proba(Xte)[:, 1]
+    auc = roc_auc_score(yte, p)
     return float(max(auc, 1 - auc))
 
 

@@ -46,7 +46,8 @@ model:
   ladder: next_scale        # next_scale | one_shot (ablation)
   conservation: true        # energy-conserving child split (ablation: false)
   use_occupancy: true
-  occ_threshold: 0.5
+  occ_mode: sample          # sample | threshold (occupancy at inference; threshold biases the number of zeros)
+  occ_threshold: 0.5        # used only when occ_mode=threshold
   denoise_head: auto        # auto -> on iff noise or preprocessing is enabled
   denoise_threshold: 0.0
   flow: {mixer_layers: 1, y_std: 3.0, eps: 1.0e-4, sigma_min: 1.0e-4, nfe: 16, solver: midpoint}

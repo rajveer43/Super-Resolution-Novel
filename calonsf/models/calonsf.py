@@ -120,6 +120,10 @@ class CaloNSF(nn.Module):
         self.denoise = nn.Sequential(nn.Linear(d, d), nn.GELU(), nn.Linear(d, 1)) if dn else None
         self.conservation = bool(m.get("conservation", True))
         self.use_occ = bool(m.get("use_occupancy", True))
+        # occupancy at inference: "sample" draws each child's hit/no-hit from its predicted probability, so the
+        # number of empty cells matches the model's occupancy rate; "threshold" keeps p > occ_threshold (biased:
+        # a cell with p = 0.4 is always dropped)
+        self.occ_mode = m.get("occ_mode", "sample")
         self.occ_thr = float(m.get("occ_threshold", 0.5))
         self.one_shot = m.get("ladder", "next_scale") == "one_shot"
         self.percep = None
@@ -204,7 +208,10 @@ class CaloNSF(nn.Module):
         else:
             frac = torch.exp(y.clamp(max=10)) * sv
         if occ_prob is not None and self.use_occ:
-            keep = (occ_prob > self.occ_thr) & sv
+            if self.occ_mode == "sample":
+                keep = (torch.rand_like(occ_prob) < occ_prob) & sv
+            else:
+                keep = (occ_prob > self.occ_thr) & sv
             am = F.one_hot(frac.argmax(-1), frac.shape[-1]).bool()
             keep = keep | (~keep.any(-1, keepdim=True) & am)
             frac = frac * keep
@@ -319,8 +326,11 @@ class CaloNSF(nn.Module):
                 l_prof = profile_w1(dh, dt_, sk)
                 lstep = lstep + float(L.profile) * l_prof
                 acc["profile"] += float(l_prof.detach())
-            if self.percep is not None and float(L.get("jepa", 0.0)) > 0 and k == ladder.K - 1:
-                l_j = self._perceptual(cidx, sval, cells.valid, E_hat, Ec, sk, total, batch, B)
+            # JEPA perceptual loss at every ladder step, so coarse-scale errors are also corrected in feature space
+            if self.percep is not None and float(L.get("jepa", 0.0)) > 0:
+                # target through the same eps floor as the flow targets: a perfect prediction gives zero loss
+                E_tgt = Ep.unsqueeze(-1) * self._fractions(x1, sval)
+                l_j = self._perceptual(cidx, sval, cells.valid, E_hat, E_tgt, sk, total, batch, B)
                 lstep = lstep + float(L.jepa) * l_j
                 acc["jepa"] += float(l_j.detach())
             total_loss = total_loss + lstep / ladder.K

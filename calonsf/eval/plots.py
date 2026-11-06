@@ -14,9 +14,9 @@ from matplotlib.colors import LinearSegmentedColormap, LogNorm, TwoSlopeNorm  # 
 
 INK, INK2, SURFACE, GRID = "#0b0b0b", "#52514e", "#fcfcfb", "#e4e3df"
 SLOTS = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6", "#e34948"]
-METHOD_SLOT = {"calonsf": 0, "nearest": 1, "bicubic": 2, "edsr": 3, "rcan": 4, "swinir": 5, "liif": 6,
+METHOD_SLOT = {"calonsf": 0, "calonsf_mean": 0, "nearest": 1, "bicubic": 2, "edsr": 3, "rcan": 4, "swinir": 5, "liif": 6,
                "ddpm": 7, "graphfm": 2, "varvq": 3}  # only <=4 series are ever drawn together
-LABEL = {"calonsf": "CaloNSF", "nearest": "LR (nearest)", "bicubic": "Bicubic", "edsr": "EDSR", "rcan": "RCAN",
+LABEL = {"calonsf": "CaloNSF", "calonsf_mean": "CaloNSF (ensemble mean)", "nearest": "LR (nearest)", "bicubic": "Bicubic", "edsr": "EDSR", "rcan": "RCAN",
          "swinir": "SwinIR", "liif": "LIIF", "ddpm": "DDPM (DiffLense)", "graphfm": "Graph-FM", "varvq": "VAR-VQ",
          "gt": "Ground truth"}
 SEQ = LinearSegmentedColormap.from_list("seq_blue", ["#ffffff", "#cde2fb", "#86b6ef", "#3987e5", "#1c5cab", "#0d366b"])

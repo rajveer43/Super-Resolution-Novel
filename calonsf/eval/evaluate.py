@@ -54,19 +54,24 @@ def collect(cfg, geom, reader, idx, factor, model, baselines, device):
     ev = cfg.eval
     dl = make_loader(cfg, reader, idx[: int(ev.n_events)], geom, False, factors=[factor],
                      batch_size=int(ev.batch_size), shuffle=False)
-    acc = {"gt": [], "lr": [], "lr_init": [], "calonsf": [], "std": []}
+    # "calonsf" is ONE sample per event (what a user gets, comparable to the deterministic baselines);
+    # "calonsf_mean" is the ensemble mean, which merges the hit cells of all samples and smooths peaks, so it
+    # is reported separately and never used for the physics comparison headline
+    acc = {"gt": [], "lr": [], "lr_init": [], "calonsf": [], "calonsf_mean": [], "std": []}
     acc.update({n: [] for n in baselines})
     meta = {"label": [], "e_inc": [], "particle": []}
-    times = {n: 0.0 for n in ["calonsf", *baselines]}
+    times = {n: 0.0 for n in ["calonsf", "calonsf_mean", *baselines]}
     for batch in dl:
         b = to_device(batch, device)
         acc["gt"].append(_np(batch["hr"]))
         acc["lr"].append(_np(batch["lr"]))
         if model is not None:
             with Timer() as t:
-                o = model.generate(b, ensemble=int(ev.ensemble), nfe=int(ev.nfe), solver=ev.solver)
-            times["calonsf"] += t.elapsed
-            acc["calonsf"].append(_np(o["grids"]))
+                o = model.generate(b, ensemble=int(ev.ensemble), nfe=int(ev.nfe), solver=ev.solver, keep_samples=True)
+            times["calonsf"] += t.elapsed / max(int(ev.ensemble), 1)
+            times["calonsf_mean"] += t.elapsed
+            acc["calonsf"].append(_np({g: v[:, 0] for g, v in o["samples"].items()}))
+            acc["calonsf_mean"].append(_np(o["grids"]))
             acc["std"].append(_np(o["std"]))
             acc["lr_init"].append(_np(o["lr_init"]))
         for n, m in baselines.items():
@@ -117,7 +122,7 @@ def run_evaluation(cfg, geom, reader, splits, model, base, device) -> dict:
         log.info(f"[eval] factor x{factor}: CaloNSF + baselines {list(bl)}")
         data, meta, times = collect(cfg, geom, reader, splits["test"], factor, model, bl, device)
         gt = data["gt"]
-        methods = [m for m in ["calonsf", *bl] if m in data]
+        methods = [m for m in ["calonsf", "calonsf_mean", *bl] if m in data]
         obs_gt = observables(gt, geom, meta)
         subs = stats.subsets(meta, cfg, geom.name)
         feats_gt = _features(geom, gt, obs_gt)
@@ -136,7 +141,7 @@ def run_evaluation(cfg, geom, reader, splits, model, base, device) -> dict:
             obs_all[m] = ob
             r = {"time_per_event_s": times.get(m, float("nan")),
                  "image": image_metrics(gt, pred, geom.energy_scale),
-                 "energy": energy_metrics(gt, pred, data["lr_init"] if m == "calonsf" else data["lr"]),
+                 "energy": energy_metrics(gt, pred, data["lr_init"] if m.startswith("calonsf") else data["lr"]),
                  "observables": stats.compare(obs_gt, ob),
                  "observables_by_subset": {s: stats.compare(obs_gt, ob, mk) for s, mk in subs.items() if s != "all"}}
             fp = _features(geom, pred, ob)
@@ -161,7 +166,7 @@ def run_evaluation(cfg, geom, reader, splits, model, base, device) -> dict:
             if probe is not None:
                 r["downstream_probe"] = probe_metrics(geom, run_model(probe, pred, meta, device, bs=16), meta, cfg)
             if m == "calonsf" and int(cfg.eval.ensemble) > 1:
-                r["uncertainty"] = calibration(gt, pred, data["std"])
+                r["uncertainty"] = calibration(gt, data["calonsf_mean"], data["std"])
             key = [k for k in KEY_OBS[geom.name] if k in r["observables"]]
             r["key_obs_mean_w1_norm"] = float(np.mean([r["observables"][k]["w1_norm"] for k in key])) if key else None
             R["methods"][m] = r
