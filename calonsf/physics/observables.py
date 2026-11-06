@@ -26,12 +26,14 @@ def _axis_coords(n: int, lo: float = -1.0, hi: float = 1.0) -> torch.Tensor:
 
 
 def _wmean_std(img: torch.Tensor, c: torch.Tensor, dim: int):
-    """Energy-weighted mean / std of coordinate c along `dim` of img (N, H, W)."""
-    prof = img.sum(dim=dim)  # (N, L)
+    """Energy-weighted mean / std of coordinate c along `dim` of img (N, H, W).
+    float64: E[c^2] - m^2 cancels badly in float32 (a single-cell shower would get width ~0.02 mm, not 0)."""
+    prof = img.double().sum(dim=dim)  # (N, L)
+    c = c.double()
     tot = prof.sum(-1).clamp(min=1e-12)
     m = (prof * c).sum(-1) / tot
     v = (prof * c ** 2).sum(-1) / tot - m ** 2
-    return m, v.clamp(min=0).sqrt()
+    return m.float(), v.clamp(min=0).sqrt().float()
 
 
 # ---------------------------------------------------------------------------------- QG

@@ -12,8 +12,11 @@ def _cols(a: np.ndarray) -> np.ndarray:
 
 
 def compare(gt: dict, pred: dict, mask: np.ndarray | None = None) -> dict:
-    """Per observable: W1 (raw and divided by GT std), KS statistic, mean/std of the per-event relative
-    residual (pred-gt)/|gt|. Vector observables are averaged over columns."""
+    """Per observable: W1 (raw and divided by GT std), KS statistic, and the relative bias
+    (mean(pred) - mean(gt)) / |mean(gt)| with spread std(pred - gt) / |mean(gt)|.
+    The bias is not the mean of per-event (pred-gt)/|gt|: for coarse layers many events have a GT width or
+    E_ratio of ~0 (one hit cell), and those near-zero denominators dominate that mean. The per-event median
+    is kept as rel_bias_median. Vector observables are averaged over columns."""
     out = {}
     for k in gt:
         if k not in pred:
@@ -23,7 +26,7 @@ def compare(gt: dict, pred: dict, mask: np.ndarray | None = None) -> dict:
             a, b = a[mask], b[mask]
         if len(a) < 2:
             continue
-        w1, w1n, ks, mr, sr = [], [], [], [], []
+        w1, w1n, ks, mr, sr, md = [], [], [], [], [], []
         for j in range(a.shape[1]):
             x, y = a[:, j], b[:, j]
             if not (np.isfinite(x).all() and np.isfinite(y).all()):
@@ -33,14 +36,19 @@ def compare(gt: dict, pred: dict, mask: np.ndarray | None = None) -> dict:
             w1.append(w)
             w1n.append(w / s if s > 0 else 0.0)
             ks.append(ks_2samp(x, y).statistic if s > 0 or y.std() > 0 else 0.0)
-            den = np.abs(x) + 1e-8
+            mu = abs(float(x.mean()))
+            if mu > 1e-12:
+                mr.append(float(y.mean() - x.mean()) / mu)
+                sr.append(float(np.std(y - x)) / mu)
+            else:
+                mr.append(0.0)
+                sr.append(0.0)
             nz = np.abs(x) > 1e-8 * (np.abs(x).max() + 1e-30)
-            rel = ((y - x) / den)[nz] if nz.any() else np.zeros(1)
-            mr.append(float(np.mean(rel)))
-            sr.append(float(np.std(rel)))
+            md.append(float(np.median((y - x)[nz] / np.abs(x[nz]))) if nz.any() else 0.0)
         if w1:
             out[k] = {"w1": float(np.mean(w1)), "w1_norm": float(np.mean(w1n)), "ks": float(np.mean(ks)),
-                      "rel_bias": float(np.mean(mr)), "rel_spread": float(np.mean(sr))}
+                      "rel_bias": float(np.mean(mr)), "rel_spread": float(np.mean(sr)),
+                      "rel_bias_median": float(np.mean(md))}
     return out
 
 

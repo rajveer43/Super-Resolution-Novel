@@ -55,13 +55,15 @@ def write_report(base: str, synthetic: bool = False) -> str:
             if "uncertainty" in c:
                 L += ["Ensemble calibration (non-empty GT cells inside mean ± kσ; Gaussian ideal 0.68 / 0.95): " +
                       ", ".join(f"{k}={_f(v)}" for k, v in c["uncertainty"].items()), ""]
+            bn =LABEL.get(R.get("best_baseline"), "baseline")
             L += ["### Physics observables (CaloNSF vs best baseline)", "",
-                  "| observable | CaloNSF W1/σ | CaloNSF KS | CaloNSF rel. bias | "
-                  f"{LABEL.get(R.get('best_baseline'), 'baseline')} W1/σ |", "|---|---|---|---|---|"]
+                  "Rel. bias = (mean(pred) − mean(GT)) / |mean(GT)|, the shift of the distribution mean.", "",
+                  f"| observable | CaloNSF W1/σ | CaloNSF KS | CaloNSF rel. bias | {bn} W1/σ | {bn} rel. bias |",
+                  "|---|---|---|---|---|---|"]
             bb = R["methods"].get(R.get("best_baseline") or "", {}).get("observables", {})
             for k, v in c["observables"].items():
                 L.append(f"| {k} | {_f(v['w1_norm'])} | {_f(v['ks'])} | {_f(v['rel_bias'])} | "
-                         f"{_f(bb.get(k, {}).get('w1_norm'))} |")
+                         f"{_f(bb.get(k, {}).get('w1_norm'))} | {_f(bb.get(k, {}).get('rel_bias'))} |")
             L.append("")
             if c.get("observables_by_subset"):
                 L += ["### Per class / particle / energy bin (CaloNSF, mean W1/σ over all observables)", "",
