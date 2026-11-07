@@ -1,0 +1,20 @@
+# Quark-Gluon jet images (CMS Open Data / ML4SCI). 125x125x3 (Tracks, ECAL, HCAL), zero-padded to 128.
+# Parquet files: convert with scripts/convert_qg_parquet.py first.
+data:
+  name: qg
+  files: [data/real/qg/quark-gluon.h5]
+  x_key: X_jets
+  y_key: y
+  pad_to: 128
+  image_halfwidth: 1.0
+  energy_scale: 1.0
+  lr_factors: [2, 4, 8]
+  noise: {enabled: false, sigma: {jet: 0.02}, threshold_k: 2.0}
+model:
+  conditioning: {incident_energy: false, particle: false}   # the q/g label is never an input
+analysis:
+  class_names: [quark, gluon]
+  energy_bins: [0, 100, 150, 200, 1000]   # jet pT bins (GeV)
+eval:
+  lr_factors: [4]
+  sweep_extra_steps: [0, 1, 2, 3, 4]       # 128, 256, 512, 1024, 2048

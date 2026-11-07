@@ -1,0 +1,16 @@
+# CaloGAN: eplus/gamma/piplus.hdf5; layers 3x96, 12x12, 12x6 (MeV); energy in GeV.
+data:
+  name: calogan
+  files: {eplus: data/real/calogan/eplus.hdf5, gamma: data/real/calogan/gamma.hdf5, piplus: data/real/calogan/piplus.hdf5}
+  sr_axes_l0: [false, true]   # layer 0 has only 3 cells along its first axis
+  energy_scale: 100.0          # MeV
+  lr_factors: [2, 4]
+  noise: {enabled: false, sigma: {default: 5.0}, threshold_k: 2.0}
+model:
+  conditioning: {incident_energy: true, particle: false, e_min: 1.0, e_max: 100.0}
+analysis:
+  class_names: [eplus, gamma, piplus]
+  energy_bins: [0, 10, 25, 50, 75, 100]    # GeV
+eval:
+  lr_factors: [2]
+  sweep_extra_steps: [0, 1, 2, 3]

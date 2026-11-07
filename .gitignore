@@ -12,7 +12,7 @@ dist/
 venv/
 
 # Datasets (multi-GB HDF5 files; see README for download locations)
-data/
+/data/
 *.h5
 *.hdf5
 *.parquet

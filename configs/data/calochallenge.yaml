@@ -1,0 +1,19 @@
+# CaloChallenge Dataset 2: 45 (z) x 16 (alpha) x 9 (r) voxels, MeV. File 2 = official evaluation set.
+data:
+  name: calochallenge
+  files: [data/real/calochallenge_v2/dataset_2_1.hdf5, data/real/calochallenge_v2/dataset_2_2.hdf5]
+  flatten_order: zar          # CHECK against the official binning XML; scripts/check_data.py tests it
+  official_split: true
+  r_edges: null               # physical radial bin edges (mm) from the binning XML; null = uniform
+  energy_scale: 100.0
+  lr_factors: [2, 4]          # alpha: 2 or 4; r (9 bins): largest divisor <= f (1 or 3)
+  batch_size: 16
+  noise: {enabled: false, sigma: {default: 2.0}, threshold_k: 2.0}
+model:
+  max_children: 16
+  conditioning: {incident_energy: true, particle: false, e_min: 1000.0, e_max: 1000000.0}
+analysis:
+  energy_bins: [1000, 10000, 100000, 1000000]   # MeV
+eval:
+  lr_factors: [4]
+  sweep_extra_steps: [0, 1, 2, 3]
