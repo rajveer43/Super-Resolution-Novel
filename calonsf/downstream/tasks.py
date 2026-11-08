@@ -83,7 +83,7 @@ def probe_metrics(geom, out, meta, cfg) -> dict:
     return _energy_res(np.exp(out[:, 0]), np.asarray(meta["e_inc"]), cfg.analysis.get("energy_bins", None))
 
 
-def classifier_test(feats_gt: np.ndarray, feats_pred: np.ndarray, seed: int = 0) -> float:
+def classifier_test(feats_gt: np.ndarray, feats_pred: np.ndarray, seed: int = 0, return_scores: bool = False):
     """CaloChallenge-style classifier test: AUC of a classifier separating GT from SR on held-out data.
     0.5 = indistinguishable (best), 1.0 = trivially separable."""
     # feats_gt[i] and feats_pred[i] are the same event, so split by EVENT: a GT event in the training half
@@ -98,12 +98,12 @@ def classifier_test(feats_gt: np.ndarray, feats_pred: np.ndarray, seed: int = 0)
     Xte = np.concatenate([fg[te], fp[te]])
     yte = np.concatenate([np.zeros(len(te)), np.ones(len(te))])
     if len(tr) < 2 or len(te) < 1:
-        return float("nan")
+        return (float("nan"), None, None) if return_scores else float("nan")
     clf = HistGradientBoostingClassifier(max_iter=200, learning_rate=0.1, random_state=seed)
     clf.fit(Xtr, ytr)
     p = clf.predict_proba(Xte)[:, 1]
-    auc = roc_auc_score(yte, p)
-    return float(max(auc, 1 - auc))
+    auc = float(max(roc_auc_score(yte, p), 1 - roc_auc_score(yte, p)))
+    return (auc, p, yte) if return_scores else auc
 
 
 # ------------------------------------------------------------------------------------- two-shower test

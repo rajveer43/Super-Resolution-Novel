@@ -33,7 +33,7 @@ def write_report(base: str, synthetic: bool = False) -> str:
         L += [f"## LR factor ×{f}  ({R['n_events']} test events)", ""]
         dref = R.get("downstream_on_gt", {})
         if dref:
-            L += ["Downstream models evaluated on ground-truth HR (reference): " +
+            L += ["Downstream models evaluated on the true HR showers (reference): " +
                   "; ".join(f"{k}: " + ", ".join(f"{a}={_f(b)}" for a, b in v.items() if not a.startswith("resolution_E"))
                             for k, v in dref.items()), ""]
         L += ["| method | MAE (log) | PSNR | SSIM | E response | key-obs W1/σ ↓ | FPD ↓ | classifier AUC (→0.5) | downstream | s/event |",
@@ -53,11 +53,11 @@ def write_report(base: str, synthetic: bool = False) -> str:
             L += [f"CaloNSF energy conservation vs its (denoised) LR input: max rel. error "
                   f"{_f(e.get('conservation_err_max'))}, mean {_f(e.get('conservation_err_mean'))}.", ""]
             if "uncertainty" in c:
-                L += ["Ensemble calibration (non-empty GT cells inside mean ± kσ; Gaussian ideal 0.68 / 0.95): " +
+                L += ["Ensemble calibration (non-empty truth cells inside mean ± kσ; Gaussian ideal 0.68 / 0.95): " +
                       ", ".join(f"{k}={_f(v)}" for k, v in c["uncertainty"].items()), ""]
             bn =LABEL.get(R.get("best_baseline"), "baseline")
             L += ["### Physics observables (CaloNSF vs best baseline)", "",
-                  "Rel. bias = (mean(pred) − mean(GT)) / |mean(GT)|, the shift of the distribution mean.", "",
+                  "Rel. bias = (mean(pred) − mean(truth)) / |mean(truth)|, the shift of the distribution mean.", "",
                   f"| observable | CaloNSF W1/σ | CaloNSF KS | CaloNSF rel. bias | {bn} W1/σ | {bn} rel. bias |",
                   "|---|---|---|---|---|---|"]
             bb = R["methods"].get(R.get("best_baseline") or "", {}).get("observables", {})
@@ -79,9 +79,9 @@ def write_report(base: str, synthetic: bool = False) -> str:
         if "two_shower" in R:
             t = R["two_shower"]
             L += ["### Two-shower separation (layer 1)", "",
-                  "Fraction of overlays with exactly 2 peaks, and fraction whose peak count matches the ground truth "
+                  "Fraction of overlays with exactly 2 peaks, and fraction whose peak count matches the truth "
                   "(speckle inflates the first number but not the second).", "",
-                  "| separation [cells] | GT: 2 peaks | LR: 2 peaks | CaloNSF: 2 peaks | LR matches GT | CaloNSF matches GT |",
+                  "| separation [cells] | Truth: 2 peaks | LR: 2 peaks | CaloNSF: 2 peaks | LR matches truth | CaloNSF matches truth |",
                   "|---|---|---|---|---|---|"]
             for i, d in enumerate(t["shift_cells"]):
                 L.append(f"| {d} | {_f(t['gt'][i])} | {_f(t['lr'][i])} | {_f(t['sr'][i])} | "
@@ -92,7 +92,7 @@ def write_report(base: str, synthetic: bool = False) -> str:
     sp = os.path.join(base, "eval", "sweep.json")
     if os.path.exists(sp):
         s = json.load(open(sp))
-        L += ["## Resolution sweep (above-native outputs have no ground truth)", "",
+        L += ["## Resolution sweep (above native resolution there is no truth to compare with)", "",
               "| output shape | s/event | memory MB | energy cons. err | pooled-to-native max diff | rel. drift of energy-weighted obs. vs native |",
               "|---|---|---|---|---|---|"]
         for row in s["rows"]:

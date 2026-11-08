@@ -54,7 +54,7 @@ def image_metrics(gt: dict, pred: dict, energy_scale: float) -> dict:
 
 
 def energy_metrics(gt: dict, pred: dict, ref: dict | None = None) -> dict:
-    """Response sum(SR)/sum(GT) and, if ref (the LR the model started from) is given, the conservation
+    """Response sum(SR)/sum(truth) and, if ref (the LR the model started from) is given, the conservation
     error |sum(SR) - sum(ref)| / sum(ref) (exactly 0 for CaloNSF by construction)."""
     eg = sum(torch.as_tensor(gt[g]).cpu().double().sum((1, 2, 3)) for g in gt)
     ep = sum(torch.as_tensor(pred[g]).cpu().double().sum((1, 2, 3)) for g in pred)
@@ -74,7 +74,7 @@ def energy_metrics(gt: dict, pred: dict, ref: dict | None = None) -> dict:
 
 
 def calibration(gt: dict, mean: dict, std: dict, ks=(1, 2)) -> dict:
-    """Fraction of non-empty GT cells inside mean +- k*sigma of the ensemble (Gaussian ideal: 0.68, 0.95)."""
+    """Fraction of non-empty truth cells inside mean +- k*sigma of the ensemble (Gaussian ideal: 0.68, 0.95)."""
     out = {}
     a = np.concatenate([np.asarray(gt[g]).ravel() for g in gt])
     m = np.concatenate([np.asarray(mean[g]).ravel() for g in gt])

@@ -1,6 +1,6 @@
 """Full evaluation: CaloNSF + every trained baseline on the test split.
 Image metrics, energy closure, physics observables (overall and per class / particle / energy bin),
-FPD/KPD, classifier two-sample test, downstream tasks (trained on GT only), uncertainty calibration,
+FPD/KPD, classifier two-sample test, downstream tasks (trained on truth only), uncertainty calibration,
 and the CaloGAN two-shower separation test. Only computed numbers are written."""
 from __future__ import annotations
 
@@ -135,6 +135,7 @@ def run_evaluation(cfg, geom, reader, splits, model, base, device) -> dict:
             down_ref["probe"] = probe_metrics(geom, run_model(probe, gt, meta, device, bs=16), meta, cfg)
         R["downstream_on_gt"] = down_ref
         rocs = {}
+        cls_scores = {}
         for m in methods:
             pred = data[m]
             ob = observables(pred, geom, meta)
@@ -151,7 +152,9 @@ def run_evaluation(cfg, geom, reader, splits, model, base, device) -> dict:
                 r["KPD"] = stats.kpd(hlf_gt, hlf_p, batch=min(500, len(hlf_gt)))
             except Exception as e:  # singular covariances on tiny eval sets
                 log.warning(f"[eval] FPD/KPD failed for {m}: {e}")
-            r["classifier_auc"] = classifier_test(feats_gt, fp, seed=int(cfg.seed))
+            r["classifier_auc"], p_cls, y_cls = classifier_test(feats_gt, fp, seed=int(cfg.seed), return_scores=True)
+            if p_cls is not None:
+                cls_scores[m] = (p_cls, y_cls, r["classifier_auc"])
             if task is not None:
                 o = run_model(task, pred, meta, device)
                 r["downstream_task"] = task_metrics(geom, o, meta, cfg)
@@ -184,6 +187,8 @@ def run_evaluation(cfg, geom, reader, splits, model, base, device) -> dict:
                                 data, data.get("std"), n=min(int(cfg.eval.n_examples), len(meta["label"])),
                                 methods=[m for m in ["calonsf", best_bl] if m])
         plots.plot_observables(os.path.join(fdir, "observables.png"), obs_gt, obs_all, KEY_OBS[geom.name], show)
+        if geom.name in ("calogan", "calochallenge"):
+            _calo_figures(geom, fdir, gt, data, obs_gt, obs_all, R, methods, show, cls_scores)
         if rocs:
             sel = {k: v for k, v in rocs.items() if k in ("gt", *show)}
             plots.plot_roc(os.path.join(fdir, "roc.png"), sel)
@@ -194,8 +199,40 @@ def run_evaluation(cfg, geom, reader, splits, model, base, device) -> dict:
             R["two_shower"] = ts
             plots.plot_curve(os.path.join(fdir, "two_shower.png"), ts["shift_cells"],
                              {"nearest": ts["lr_agree"], "calonsf": ts["sr_agree"]},
-                             "separation [layer-1 cells]", "peak count matches ground truth", "Two-shower separation")
+                             "separation [layer-1 cells]", "peak count matches truth", "Two-shower separation")
         R["best_baseline"] = best_bl
         results["factors"][str(factor)] = R
     save_json(results, os.path.join(out_dir, "metrics.json"))
+    if geom.name in ("calogan", "calochallenge"):
+        all_m = sorted({m for R in results["factors"].values() for m in R["methods"]})
+        top = [m for m in ["calonsf", "nearest", "ddpm", "edsr"] if m in all_m]  # <= 4 lines per chart
+        plots.plot_w1_vs_factor(os.path.join(out_dir, "w1_vs_factor.png"), results["factors"], top)
     return results
+
+
+# Scatter plots: energy-weighted shower shapes and occupancy, the ones SR can get wrong (energies are conserved)
+SCATTER_OBS = {"calogan": ["width_eta_1", "width_phi_1", "width_eta_2", "sparsity_1", "E_ratio_1"],
+               "calochallenge": ["E_ratio_inc"]}
+
+
+def _calo_figures(geom, fdir, gt, data, obs_gt, obs_all, R, methods, show, cls_scores):
+    """Detailed CaloGAN / CaloChallenge diagnostics, written to eval/x<factor>/ (hist/ and profile/ subfolders)."""
+    sr = [m for m in show if m != "gt"]  # CaloNSF, nearest, best baseline: <= 3 methods + truth per chart
+    try:
+        plots.plot_hist_ratio(plots.ensure(os.path.join(fdir, "hist")), obs_gt, obs_all, sr)
+        plots.plot_profiles(plots.ensure(os.path.join(fdir, "profile")), obs_gt, obs_all, sr)
+        plots.plot_scatter(os.path.join(fdir, "scatter.png"), obs_gt, obs_all, SCATTER_OBS[geom.name],
+                           [m for m in sr if m != "nearest"])
+        plots.plot_w1_heatmap(os.path.join(fdir, "w1_heatmap.png"), R["methods"], methods,
+                              f"{geom.name}: W1/σ to truth per observable")
+        plots.plot_corr_diff(os.path.join(fdir, "corr_diff.png"), obs_gt, obs_all, [m for m in sr if m != "nearest"])
+        plots.plot_mean_residual(os.path.join(fdir, "mean_residual.png"), geom, gt, data, sr)
+        plots.plot_cell_spectrum(os.path.join(fdir, "cell_spectrum.png"), gt, data, sr)
+        plots.plot_occupancy(os.path.join(fdir, "occupancy.png"), gt, data, sr)
+        plots.plot_classifier_scores(os.path.join(fdir, "classifier_scores.png"),
+                                     {m: cls_scores[m] for m in sr if m in cls_scores})
+        if "calonsf_mean" in data and "std" in data:
+            plots.plot_calibration(os.path.join(fdir, "calibration.png"), gt, data["calonsf_mean"], data["std"])
+        plots.plot_downstream_vs_energy(os.path.join(fdir, "downstream_vs_energy.png"), R["methods"], sr)
+    except Exception as e:  # a figure must never lose the metrics
+        log.warning(f"[eval] calorimeter figures failed: {e}")
