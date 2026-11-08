@@ -71,6 +71,15 @@ setup_python() {
         module load pytorch
         set -u
     fi
+    # Nothing goes to $HOME (small quota): extra pip packages, pip/matplotlib/torch caches live under $ROOT.
+    # Set after "module load", which points PYTHONUSERBASE at $HOME/.local.
+    export PYTHONUSERBASE="$ROOT/python"
+    export PATH="$PYTHONUSERBASE/bin:$PATH"
+    export PIP_CACHE_DIR="$ROOT/cache/pip"
+    export XDG_CACHE_HOME="$ROOT/cache"
+    export MPLCONFIGDIR="$ROOT/cache/matplotlib"
+    export TORCH_HOME="$ROOT/cache/torch"
+    mkdir -p "$PYTHONUSERBASE" "$PIP_CACHE_DIR" "$MPLCONFIGDIR" "$TORCH_HOME"
     export PYTHONPATH="$REPO${PYTHONPATH:+:$PYTHONPATH}"
     export PYTHONUNBUFFERED=1
     export MPLBACKEND=Agg

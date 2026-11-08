@@ -1,7 +1,7 @@
 #!/bin/bash
 # One-time setup, on a Perlmutter login node:  bash slurm/setup_env.sh
-# Loads the NERSC PyTorch module, installs the few missing packages into the module's user site
-# (kept between sessions), links data/ to $DATA_ROOT and checks that the code imports.
+# Loads the NERSC PyTorch module, installs the few missing packages into $ROOT/python on $SCRATCH
+# (never $HOME), links data/ to $DATA_ROOT and checks that the code imports.
 set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=common.sh
@@ -19,7 +19,7 @@ for spec in numpy scipy h5py yaml:pyyaml matplotlib sklearn:scikit-learn skimage
     python -c "import $mod" 2> /dev/null || missing+=("$pkg")
 done
 if ((${#missing[@]})); then
-    echo "installing into the user site of this module: ${missing[*]}"
+    echo "installing into $PYTHONUSERBASE: ${missing[*]}"
     pip install --user "${missing[@]}"
 fi
 python -c "import calonsf.models.calonsf, calonsf.eval.evaluate, calonsf.train.trainer; print('calonsf imports ok')"
