@@ -31,6 +31,6 @@ TIME_JEPA=06:00:00
 TIME_TUNE=16:00:00            # whole study; it continues after a timeout (--from tune)
 TIME_SR=24:00:00
 TIME_BASELINE=08:00:00        # per baseline (one array task each)
-TIME_DOWNSTREAM=04:00:00
+TIME_DOWNSTREAM=08:00:00       # CaloChallenge needs ~5 h (25 epochs x ~12 min); CaloGAN much less
 TIME_EVAL=06:00:00
 TIME_SWEEP=02:00:00
