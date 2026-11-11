@@ -383,6 +383,10 @@ class CaloNSF(nn.Module):
             cells, cidx, sval, extra, inh, has = self._prep(dense, sp, sk, step, state, None)
             h = self._decode(cells, extra, inh, has, total, enc, enc_cells, cond)
             occ = torch.sigmoid(self.occ_head(h)) if self.use_occ else None
+            # Above native resolution there was no training data: sampling hit/no-hit again at every extra
+            # step breaks the shower into isolated dots. Keep every sub-cell there (split energy smoothly).
+            if k + 1 > ladder.native_index and self.cfg.model.get("above_native_occupancy", "keep") == "keep":
+                occ = None
             x = self._sample_flow(h, sval, cells, cond, nfe, solver) if self.gen_type == "flow" else self.reg(h)
             frac = self._fractions(x, sval, occ)
             Ec = cells.energy.unsqueeze(-1) * frac

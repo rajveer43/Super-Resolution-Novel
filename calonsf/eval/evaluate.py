@@ -223,6 +223,8 @@ def _calo_figures(geom, fdir, gt, data, obs_gt, obs_all, R, methods, show, cls_s
         plots.plot_profiles(plots.ensure(os.path.join(fdir, "profile")), obs_gt, obs_all, sr)
         plots.plot_scatter(os.path.join(fdir, "scatter.png"), obs_gt, obs_all, SCATTER_OBS[geom.name],
                            [m for m in sr if m != "nearest"])
+        tvp_keys = list(dict.fromkeys(KEY_OBS[geom.name] + SCATTER_OBS[geom.name]))
+        plots.plot_truth_vs_pred(plots.ensure(os.path.join(fdir, "truth_vs_pred")), obs_gt, obs_all, tvp_keys, sr)
         plots.plot_w1_heatmap(os.path.join(fdir, "w1_heatmap.png"), R["methods"], methods,
                               f"{geom.name}: W1/σ to truth per observable")
         plots.plot_corr_diff(os.path.join(fdir, "corr_diff.png"), obs_gt, obs_all, [m for m in sr if m != "nearest"])

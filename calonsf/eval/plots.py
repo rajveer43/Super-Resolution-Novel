@@ -299,6 +299,70 @@ def plot_scatter(path, obs_gt: dict, obs: dict, keys: list[str], methods: list[s
     _save(fig, path)
 
 
+def plot_truth_vs_pred(out_dir, obs_gt: dict, obs: dict, keys: list[str], methods: list[str], bins: int = 20,
+                       min_count: int = 20, suffix: str = ""):
+    """Event-by-event check (one figure per observable). Top row: 2D histogram of truth (x) vs method (y)
+    for each method, with y = x; a perfect model puts all density on the diagonal. Bottom row: in bins of
+    the truth value, the mean of (method - truth) (bias) and the RMSE around truth (spread), all methods
+    overlaid. Bins with < min_count events are left out."""
+    methods = [m for m in methods if m in obs]
+    for k in keys:
+        if k not in obs_gt or np.asarray(obs_gt[k]).ndim != 1:
+            continue
+        a = np.asarray(obs_gt[k], float)
+        series = {m: np.asarray(obs[m][k], float) for m in methods if k in obs[m]}
+        if not series or a.std() == 0:
+            continue
+        lo, hi = _range([a], 0.5, 99.5)  # axes follow truth; predictions outside are drawn on the edge
+        pad = 0.1 * (hi - lo)
+        lo, hi = lo - pad, hi + pad
+        edges = np.linspace(lo, hi, 61)
+        bedges = np.percentile(a[(a >= lo) & (a <= hi)], np.linspace(0, 100, bins + 1))
+        bedges = np.unique(bedges)
+        centres = 0.5 * (bedges[1:] + bedges[:-1])
+        n = len(series)
+        fig = plt.figure(figsize=(3.2 * max(n, 2), 6.4))
+        fig.patch.set_facecolor(SURFACE)
+        gs = fig.add_gridspec(2, 2 * max(n, 2), height_ratios=[1.1, 1])
+        span = 2 * max(n, 2) // n
+        bx = fig.add_subplot(gs[1, : max(n, 2)])
+        rx = fig.add_subplot(gs[1, max(n, 2):])
+        for ax in (bx, rx):
+            _style(ax)
+        for j, (m, b) in enumerate(series.items()):
+            ax = fig.add_subplot(gs[0, j * span:(j + 1) * span])
+            _style(ax)
+            ax.grid(False)
+            h, _, _ = np.histogram2d(np.clip(a, lo, hi), np.clip(b, lo, hi), [edges, edges])
+            ax.imshow(np.where(h > 0, h, np.nan).T, origin="lower", extent=(lo, hi, lo, hi), cmap=SEQ,
+                      norm=LogNorm(1, max(h.max(), 2)), aspect="auto", interpolation="nearest")
+            ax.plot([lo, hi], [lo, hi], color=INK, lw=0.8, ls="--")
+            d = b - a
+            ax.set_title(f"{LABEL.get(m, m)}\nbias {d.mean():+.3g}  RMSE {np.sqrt((d ** 2).mean()):.3g}",
+                         fontsize=8, color=INK)
+            ax.set_xlabel(f"truth {k}", fontsize=8, color=INK2)
+            if j == 0:
+                ax.set_ylabel(f"predicted {k}", fontsize=8, color=INK2)
+            idx = np.digitize(a, bedges[1:-1])
+            ok = (a >= bedges[0]) & (a <= bedges[-1])
+            mu, rm = np.full(len(centres), np.nan), np.full(len(centres), np.nan)
+            for i in range(len(centres)):
+                s = ok & (idx == i)
+                if s.sum() >= min_count:
+                    mu[i] = d[s].mean()
+                    rm[i] = np.sqrt((d[s] ** 2).mean())
+            bx.plot(centres, mu, "-o", ms=3, lw=1.6, color=color(m), label=LABEL.get(m, m))
+            rx.plot(centres, rm, "-o", ms=3, lw=1.6, color=color(m), label=LABEL.get(m, m))
+        bx.axhline(0, color=INK2, lw=0.8)
+        bx.set_title("mean(pred − truth) in bins of truth", fontsize=9, color=INK)
+        rx.set_title("RMSE in bins of truth", fontsize=9, color=INK)
+        rx.set_ylim(bottom=0)
+        for ax in (bx, rx):
+            ax.set_xlabel(f"truth {k}", fontsize=8, color=INK2)
+        bx.legend(frameon=False, fontsize=7)
+        _save(fig, os.path.join(out_dir, f"tvp_{k}{suffix}.png"))
+
+
 def plot_w1_heatmap(path, results: dict, methods: list[str], title: str):
     """W1/sigma per observable (rows) and method (columns), log colour scale, value printed in each cell."""
     methods = [m for m in methods if m in results]
