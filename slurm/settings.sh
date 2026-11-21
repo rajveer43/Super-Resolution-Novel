@@ -11,12 +11,14 @@ GPU_MEM=40                    # 40 | 80 (80 GB A100s are fewer, so they may queu
 CONFIG_NAME=calochallenge_large   # a file in configs/experiments/ without .yaml:
                               #   calochallenge_large (A100 preset) | calochallenge (laptop-sized)
 RUN_TAG=full                  # what this experiment tests, in words joined by '-' (letters, digits, '-', '.')
-RUN_DATE=                     # empty = today (Asia/Kolkata) -> new experiment; a fixed date resumes that one
+RUN_DATE=2026-11-21           # fixed = every submit and restart (--from ...) of this run uses the same experiment folder;
+                              # empty = today (Asia/Kolkata), i.e. a new experiment each day
                               # -> experiment <RUN_DATE>_<CONFIG_NAME>_<RUN_TAG>, e.g. 2026-11-05_calochallenge_large_full
 # Config overrides for every stage, space separated key=value (YAML values, no spaces inside a value).
 # calochallenge_large already holds the A100 settings (all events, bigger model, 24 JEPA / 20 SR epochs);
-# add overrides here, e.g. EXTRA_SET="train.epochs=40 jepa.batch_size=64".
-EXTRA_SET=""
+# the values below repeat the preset on purpose, so the run.env of the experiment records them. Fallbacks:
+#   SR out of memory:  data.batch_size=8        eval too slow:  eval.classifier.seeds=3
+EXTRA_SET="data.batch_size=16 jepa.batch_size=32 eval.classifier.seeds=10"
 
 # ---- where things go -----------------------------------------------------------------------------
 ROOT="$SCRATCH/calonsf"       # runs/ logs/ live here ($SCRATCH: fast, purged after 8 weeks unused)
