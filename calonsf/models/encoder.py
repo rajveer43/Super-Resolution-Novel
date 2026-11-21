@@ -51,7 +51,7 @@ class CellEmbed(nn.Module):
 
 
 class Conditioner(nn.Module):
-    """Incident-energy / particle-type conditioning vector (B, d). Never uses the QG class label."""
+    """Incident-energy / particle-type conditioning vector (B, d). Never uses a class label."""
 
     def __init__(self, d: int, cfg_c, n_particles: int = 3):
         super().__init__()

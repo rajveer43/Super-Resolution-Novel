@@ -1,8 +1,8 @@
-"""Super-resolve test events to ANY output size with one model, e.g. QG to 2048x2048 (or 300x300).
+"""Super-resolve test events to ANY output size with one model, e.g. CaloChallenge showers on a finer (alpha, r) grid.
 Generates on the next-scale ladder up to the next power-of-two refinement >= the requested size, then
 uses exact area-overlap resampling (energy conserving) to hit the size exactly.
 
-    python scripts/super_resolve.py --config configs/experiments/qg_synthetic.yaml --out-size 2048 --n 2
+    python scripts/super_resolve.py --config configs/experiments/calochallenge_synthetic.yaml --out-size 32 --n 2
 """
 import math
 import os
@@ -11,9 +11,8 @@ import numpy as np
 
 from calonsf.data.degrade import make_loader
 from calonsf.data.ops import resample_energy
-from calonsf.eval import plots
-from calonsf.eval.plots import _view
 from calonsf.train.common import load_calonsf, parse, setup
+from calonsf.utils import viz
 from calonsf.utils.misc import to_device
 
 
@@ -41,8 +40,8 @@ for i, batch in enumerate(dl):
         res[g] = resample_energy(v, tgt).cpu().numpy()
     np.savez_compressed(os.path.join(out, f"event{i}_size{args.out_size}.npz"), **res,
                         **{f"lr_{g}": v.numpy() for g, v in batch["lr"].items()})
-    img = _view(geom, res, 0)
-    plots.save_image(os.path.join(out, f"event{i}_size{args.out_size}.png"), img,
+    img = viz.view(res, 0)
+    viz.save_image(os.path.join(out, f"event{i}_size{args.out_size}.png"), img,
                      f"CaloNSF output {img.shape[0]}x{img.shape[1]}")
     e_in = sum(float(v.sum()) for v in o["lr_init"].values())
     e_out = sum(float(v.sum()) for v in res.values())

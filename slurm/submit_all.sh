@@ -6,16 +6,14 @@
 #   bash slurm/submit_all.sh --smoke          the 30-minute check on synthetic data (debug QOS)
 #   bash slurm/submit_all.sh --dry-run        print the sbatch commands, submit nothing
 #
-# Stages: jepa -> [tune] -> sr -----------------------------> eval -> sweep -> pack
-#             \-> downstream --------------------/
-#         baselines[one per model x factor] -----/
+# Stages: jepa -> sr -> eval (then the results are packed into a tarball)
 # Finished stages are skipped (a .done_<stage> marker), so re-submitting after a failure or timeout is safe.
 set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=common.sh
 source "$REPO/slurm/common.sh"
 
-STAGES=(jepa tune sr baselines downstream eval sweep)
+STAGES=(jepa sr eval)
 FROM=jepa
 DRY=0
 SMOKE=0
@@ -66,7 +64,7 @@ echo "logs       : $LOGDIR"
 # ---- freeze the settings for the jobs ------------------------------------------------------------
 write_env() {
     local v
-    for v in REPO ROOT DATA_ROOT EXPERIMENT ACCOUNT QOS GPU_MEM CONFIG_NAME RUN_TAG RUN_DATE TUNE EXTRA_SET CFS_COPY; do
+    for v in REPO ROOT DATA_ROOT EXPERIMENT ACCOUNT QOS GPU_MEM CONFIG_NAME RUN_TAG RUN_DATE EXTRA_SET CFS_COPY; do
         printf 'export %s=%q\n' "$v" "${!v}"
     done
 }
@@ -129,36 +127,15 @@ if ((SMOKE)); then
     exit 0
 fi
 
-# one array task per baseline; reading the list needs python, so load the module on the login node too
-setup_python > /dev/null 2>&1 || true
-n_bl=$(baseline_tasks | wc -l | tr -d ' ')
-[[ "$n_bl" =~ ^[0-9]+$ ]] || die "could not read the baseline list from $CONFIG (does 'python -c \"import calonsf\"' work?)"
-
-J="" T="" S="" B="" D=""
+J="" S=""
 if wanted jepa; then
     J=$(sub jepa "$TIME_JEPA" 01_jepa.slurm "")
 fi
-if wanted tune && [[ "${TUNE:-0}" == 1 ]]; then
-    T=$(sub tune "$TIME_TUNE" 01b_tune.slurm "$(dep "afterok:$J")")
-fi
 if wanted sr; then
-    S=$(sub sr "$TIME_SR" 02_sr.slurm "$(dep "afterok:$J" "afterok:$T")")
+    S=$(sub sr "$TIME_SR" 02_sr.slurm "$(dep "afterok:$J")")
 fi
-if wanted baselines && ((n_bl)); then
-    # baselines do not need the JEPA encoder, so they start straight away and run in parallel
-    B=$(sub baselines "$TIME_BASELINE" 03_baselines.slurm "" "0-$((n_bl - 1))")
-fi
-if wanted downstream; then
-    # the attentive probe sits on the JEPA encoder
-    D=$(sub downstream "$TIME_DOWNSTREAM" 04_downstream.slurm "$(dep "afterok:$J")")
-fi
-E=""
 if wanted eval; then
-    E=$(sub eval "$TIME_EVAL" 05_eval.slurm "$(dep "afterok:$S" "afterok:$B" "afterok:$D")")
-fi
-if wanted sweep; then
-    # after the evaluation (even a failed one), so the sweep table lands in report.md and the pack is complete
-    sub sweep "$TIME_SWEEP" 06_sweep.slurm "$(dep "afterok:$S" "afterany:$E")" > /dev/null
+    sub eval "$TIME_EVAL" 05_eval.slurm "$(dep "afterok:$S")" > /dev/null
 fi
 
 echo

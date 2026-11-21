@@ -4,7 +4,7 @@
 # Copies the tarball to CFS_COPY if that is set.
 #
 #   bash slurm/pack_results.sh [<experiment>] [--with-checkpoints]
-# Runs automatically at the end of the sweep job.
+# Runs automatically at the end of the eval job.
 set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=common.sh

@@ -20,7 +20,7 @@ if isinstance(reader, CaloChallengeReader):
 for f in cfg.data.lr_factors:
     b = next(iter(make_loader(cfg, reader, splits["train"][:64], geom, False, factors=[int(f)], batch_size=32)))
     hr = sum(float(v.sum()) for v in b["hr"].values())
-    lr = sum(float(v.sum()) for v in b["lr_clean"].values())
+    lr = sum(float(v.sum()) for v in b["lr"].values())
     log.info(f"factor {f}: per-group factors {b['factors']}, LR shapes "
              f"{ {g: tuple(v.shape[-2:]) for g, v in b['lr'].items()} }, sum-pool closure {lr / hr:.8f}")
     e = b["e_inc"].numpy()

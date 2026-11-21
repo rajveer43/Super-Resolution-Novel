@@ -1,0 +1,14 @@
+# Real-data preset for one A100 (Perlmutter): a larger model and a longer, gentler training schedule.
+# Why: the d_model-128 run plateaued with train ~ val loss (capacity-limited), and JEPA was still improving at its last epoch.
+# Size: CaloNSF 19.8 M parameters (3.3 M before), JEPA 9.1 M (1.6 M). On CPU a training step is ~3x slower than d_model 128
+# (an upper bound for an A100), so the old 16 min JEPA / 33 min SR epoch becomes up to ~50 / ~110 min: the epoch counts below
+# fit TIME_JEPA / TIME_SR in slurm/settings.sh. If a stage still times out, re-submit it: training resumes from last.pt.
+_base_: [../base.yaml, ../data/calochallenge.yaml]
+exp_name: calochallenge_large
+# SR batch 16: every one of the 6 best Optuna trials of the d_model-128 run used 16 (lr 1.0-2.0e-4), and 32 x 3072 parents at
+# d_model 256 in fp32 may not fit a 40 GB A100 (not measured). If it fits and runs slowly, try data.batch_size=32 train.lr=2e-4.
+data: {max_events: null, batch_size: 16, num_workers: 8}
+model: {d_model: 256, heads: 8, enc_layers: 6, dec_layers: 6, flow: {mixer_layers: 2}}
+jepa: {epochs: 24, lr: 2.0e-4, batch_size: 32, warmup_frac: 0.05, decay_frac: 0.4, d_pred: 192, pred_heads: 6, pred_layers: 4}
+train: {epochs: 20, lr: 1.5e-4, encoder_lr_mult: 0.3, select_events: 300}
+eval: {lr_factors: [2, 4]}

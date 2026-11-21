@@ -1,4 +1,4 @@
-"""Lazy HDF5 readers for the three datasets. Each reader returns, per event,
+"""Lazy HDF5 reader for CaloChallenge Dataset 2. The reader returns, per event,
     groups: {group_name: float32 array (n_layers, H, W)}  energies in native units
     meta:   {"label": int, "e_inc": float, "particle": int, ...}
 
@@ -33,85 +33,6 @@ class _H5:
             self._f = h5py.File(self.path, "r")
             self._pid = os.getpid()
         return self._f
-
-
-class QGReader:
-    """Quark-Gluon jet images (CMS Open Data / ML4SCI). Expects HDF5 with
-    X_jets (N,125,125,3) or (N,3,125,125), y (N,), optional pt, m0.
-    Parquet files: convert first with scripts/convert_qg_parquet.py."""
-
-    def __init__(self, files: list[str], x_key: str = "X_jets", y_key: str = "y", pad_to: int = 128):
-        self.h5 = [_H5(p) for p in files]
-        self.x_key, self.y_key, self.pad_to = x_key, y_key, pad_to
-        self.lengths = [h.f[x_key].shape[0] for h in self.h5]
-        self.cum = np.concatenate([[0], np.cumsum(self.lengths)])
-        shp = self.h5[0].f[x_key].shape[1:]
-        if shp == (125, 125, 3):
-            self.channel_last = True
-        elif shp == (3, 125, 125):
-            self.channel_last = False
-        else:
-            raise ValueError(f"Unexpected QG image shape {shp}; expected (125,125,3) or (3,125,125).")
-        assert pad_to >= 125
-        p = pad_to - 125
-        self.pad = (p // 2, p - p // 2)
-        log.info(f"[QG] {self.cum[-1]} events, image {shp}, channel_last={self.channel_last}, "
-                 f"padding 125->{pad_to} with offsets {self.pad} (zeros)")
-
-    def __len__(self) -> int:
-        return int(self.cum[-1])
-
-    def _loc(self, i: int):
-        f = int(np.searchsorted(self.cum, i, side="right") - 1)
-        return f, i - int(self.cum[f])
-
-    def get(self, i: int):
-        fi, j = self._loc(i)
-        f = self.h5[fi].f
-        x = np.asarray(f[self.x_key][j], dtype=np.float32)
-        if self.channel_last:
-            x = x.transpose(2, 0, 1)
-        x = np.clip(x, 0, None)
-        x = np.pad(x, ((0, 0), self.pad, self.pad))
-        meta = {"label": int(f[self.y_key][j]) if self.y_key in f else -1,
-                "e_inc": float(f["pt"][j]) if "pt" in f else -1.0,
-                "particle": -1}
-        if "m0" in f:
-            meta["m0"] = float(f["m0"][j])
-        return {"jet": x}, meta
-
-
-class CaloGANReader:
-    """CaloGAN 'Electromagnetic Calorimeter Shower Images' (eplus/gamma/piplus.hdf5).
-    energy: GeV (incident); layer_*: MeV; overflow: MeV."""
-    PARTICLES = ["eplus", "gamma", "piplus"]
-
-    def __init__(self, files: dict[str, str]):
-        self.names = [p for p in self.PARTICLES if p in files]
-        self.h5 = [_H5(files[p]) for p in self.names]
-        self.lengths = [h.f["layer_0"].shape[0] for h in self.h5]
-        self.cum = np.concatenate([[0], np.cumsum(self.lengths)])
-        f0 = self.h5[0].f
-        assert f0["layer_0"].shape[1:] == (3, 96), f0["layer_0"].shape
-        assert f0["layer_1"].shape[1:] == (12, 12), f0["layer_1"].shape
-        assert f0["layer_2"].shape[1:] == (12, 6), f0["layer_2"].shape
-        log.info(f"[CaloGAN] particles {self.names} with {self.lengths} events; energy in GeV, deposits in MeV")
-
-    def __len__(self) -> int:
-        return int(self.cum[-1])
-
-    def get(self, i: int):
-        p = int(np.searchsorted(self.cum, i, side="right") - 1)
-        j = i - int(self.cum[p])
-        f = self.h5[p].f
-        groups = {f"layer_{k}": np.clip(np.asarray(f[f"layer_{k}"][j], dtype=np.float32), 0, None)[None]
-                  for k in range(3)}
-        e = float(np.asarray(f["energy"][j]).reshape(-1)[0])
-        meta = {"label": self.PARTICLES.index(self.names[p]), "particle": self.PARTICLES.index(self.names[p]),
-                "e_inc": e}
-        if "overflow" in f:
-            meta["overflow"] = float(np.asarray(f["overflow"][j]).sum())
-        return groups, meta
 
 
 class CaloChallengeReader:
@@ -169,10 +90,6 @@ def verify_flatten_order(reader: CaloChallengeReader, n: int = 500) -> dict:
 
 def make_reader(cfg):
     d = cfg.data
-    if d.name == "qg":
-        return QGReader(list(d.files), d.get("x_key", "X_jets"), d.get("y_key", "y"), int(d.get("pad_to", 128)))
-    if d.name == "calogan":
-        return CaloGANReader(dict(d.files))
     if d.name == "calochallenge":
         return CaloChallengeReader(list(d.files), d.get("flatten_order", "zar"))
     raise ValueError(d.name)

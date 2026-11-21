@@ -1,10 +1,8 @@
 """Detector geometry, multi-resolution scale specs, and the next-scale ladder.
 
-Every dataset is described as a list of *layer groups*. A group is a stack of `n_layers` 2D grids that
-share one shape (H, W):
-    Quark-Gluon  : 1 group  (3 layers = Tracks/ECAL/HCAL, 128x128 after padding 125->128)
-    CaloGAN      : 3 groups (layer_0 3x96, layer_1 12x12, layer_2 12x6) - heterogeneous granularity
-    CaloChallenge: 1 group  (45 longitudinal layers, each a 16 (alpha) x 9 (r) polar grid)
+The detector is described as a list of *layer groups*. A group is a stack of `n_layers` 2D grids that
+share one shape (H, W). CaloChallenge Dataset 2 is 1 group: 45 longitudinal layers, each a 16 (alpha) x 9 (r)
+polar grid. (The machinery also handles several groups of different granularity.)
 
 Each cell gets continuous coordinates (depth, u, v). Non-periodic axes live in [-1, 1]; periodic axes
 (CaloChallenge alpha) are in radians [0, 2pi). This is what makes the model resolution-agnostic
@@ -353,18 +351,6 @@ def parent_index(child_idx: torch.Tensor, child_spec: ScaleSpec, parent_spec: Sc
 def make_geometry(cfg) -> Geometry:
     name = cfg.data.name
     es = float(cfg.data.get("energy_scale", 1.0))
-    if name == "qg":
-        H = int(cfg.data.get("pad_to", 128))
-        return Geometry("qg", [LayerGroup("jet", ["tracks", "ecal", "hcal"], (H, H), [-1.0, 0.0, 1.0])],
-                        energy_scale=es, extras=dict(halfwidth=float(cfg.data.get("image_halfwidth", 1.0))))
-    if name == "calogan":
-        # all three layers span the same transverse extent (480 mm); coordinates in [-1, 1].
-        groups = [
-            LayerGroup("layer_0", ["layer_0"], (3, 96), [-1.0], sr_axes=tuple(cfg.data.get("sr_axes_l0", [False, True]))),
-            LayerGroup("layer_1", ["layer_1"], (12, 12), [0.0]),
-            LayerGroup("layer_2", ["layer_2"], (12, 6), [1.0]),
-        ]
-        return Geometry("calogan", groups, energy_scale=es, extras=dict(extent_mm=480.0))
     if name == "calochallenge":
         nz, na, nr = 45, 16, 9
         depths = list(np.linspace(-1, 1, nz))

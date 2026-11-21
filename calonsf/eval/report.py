@@ -1,107 +1,89 @@
-"""Markdown report from metrics.json (+ sweep.json if present). Prints only computed numbers."""
+"""report.md from eval/metrics.json: only numbers that were computed are shown."""
 from __future__ import annotations
 
 import json
 import os
 
-from .plots import LABEL
+import numpy as np
+
+from .features import LAYERED, SCALAR
+
+NAME = {"calonsf": "CaloNSF", "nearest": "Nearest", "bicubic": "Bicubic"}
 
 
-def _f(x, nd=4):
-    if x is None:
-        return "–"
-    if isinstance(x, float):
-        return f"{x:.{nd}g}"
-    return str(x)
+def _f(x, p=4):
+    return "n/a" if x is None or (isinstance(x, float) and not np.isfinite(x)) else f"{x:.{p}g}"
 
 
-def _main_down(r):
-    t = r.get("downstream_task", {})
-    for k in ("roc_auc", "accuracy", "rel_resolution"):
-        if k in t:
-            return k, t[k]
-    return None, None
+def _table(head, rows):
+    out = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
+    out += ["| " + " | ".join(r) + " |" for r in rows]
+    return out
 
 
 def write_report(base: str, synthetic: bool = False) -> str:
-    m = json.load(open(os.path.join(base, "eval", "metrics.json")))
-    L = [f"# CaloNSF evaluation – {m['dataset']}", ""]
+    res = json.load(open(os.path.join(base, "eval", "metrics.json")))
+    L = ["# CaloChallenge Dataset 2: CaloNSF evaluation", ""]
     if synthetic:
-        L += ["> **Synthetic toy data.** These numbers only show that the pipeline runs end to end. "
-              "They say nothing about physics performance.", ""]
-    for f, R in m["factors"].items():
-        L += [f"## LR factor ×{f}  ({R['n_events']} test events)", ""]
-        dref = R.get("downstream_on_gt", {})
-        if dref:
-            L += ["Downstream models evaluated on the true HR showers (reference): " +
-                  "; ".join(f"{k}: " + ", ".join(f"{a}={_f(b)}" for a, b in v.items() if not a.startswith("resolution_E"))
-                            for k, v in dref.items()), ""]
-        L += ["| method | MAE (log) | PSNR | SSIM | E response | key-obs W1/σ ↓ | FPD ↓ | classifier AUC (→0.5) | downstream | s/event |",
-              "|---|---|---|---|---|---|---|---|---|---|"]
-        for name, r in R["methods"].items():
-            img = list(r["image"].values())
-            avg = lambda k: sum(i[k] for i in img) / len(img)
-            dk, dv = _main_down(r)
-            L.append(f"| {LABEL.get(name, name)} | {_f(avg('MAE'))} | {_f(avg('PSNR'))} | {_f(avg('SSIM'))} | "
-                     f"{_f(r['energy']['response_mean'])} ± {_f(r['energy']['response_std'], 2)} | "
-                     f"{_f(r.get('key_obs_mean_w1_norm'))} | {_f(r.get('FPD'))} | {_f(r.get('classifier_auc'))} | "
-                     f"{(dk + '=' + _f(dv)) if dk else '–'} | {_f(r.get('time_per_event_s'), 3)} |")
-        L.append("")
-        c = R["methods"].get("calonsf")
-        if c:
-            e = c["energy"]
-            L += [f"CaloNSF energy conservation vs its (denoised) LR input: max rel. error "
-                  f"{_f(e.get('conservation_err_max'))}, mean {_f(e.get('conservation_err_mean'))}.", ""]
-            if "uncertainty" in c:
-                L += ["Ensemble calibration (non-empty truth cells inside mean ± kσ; Gaussian ideal 0.68 / 0.95): " +
-                      ", ".join(f"{k}={_f(v)}" for k, v in c["uncertainty"].items()), ""]
-            bn =LABEL.get(R.get("best_baseline"), "baseline")
-            L += ["### Physics observables (CaloNSF vs best baseline)", "",
-                  "Rel. bias = (mean(pred) − mean(truth)) / |mean(truth)|, the shift of the distribution mean.", "",
-                  f"| observable | CaloNSF W1/σ | CaloNSF KS | CaloNSF rel. bias | {bn} W1/σ | {bn} rel. bias |",
-                  "|---|---|---|---|---|---|"]
-            bb = R["methods"].get(R.get("best_baseline") or "", {}).get("observables", {})
-            for k, v in c["observables"].items():
-                L.append(f"| {k} | {_f(v['w1_norm'])} | {_f(v['ks'])} | {_f(v['rel_bias'])} | "
-                         f"{_f(bb.get(k, {}).get('w1_norm'))} | {_f(bb.get(k, {}).get('rel_bias'))} |")
-            L.append("")
-            if c.get("observables_by_subset"):
-                L += ["### Per class / particle / energy bin (CaloNSF, mean W1/σ over all observables)", "",
-                      "| subset | mean W1/σ | downstream |", "|---|---|---|"]
-                for s, d in c["observables_by_subset"].items():
-                    if not d:
-                        continue
-                    w = sum(v["w1_norm"] for v in d.values()) / len(d)
-                    ds = c.get("downstream_task_by_subset", {}).get(s, {})
-                    L.append(f"| {s} | {_f(w)} | " + ", ".join(f"{a}={_f(b)}" for a, b in ds.items()
-                                                             if not a.startswith("resolution_E")) + " |")
-                L.append("")
-        if "two_shower" in R:
-            t = R["two_shower"]
-            L += ["### Two-shower separation (layer 1)", "",
-                  "Fraction of overlays with exactly 2 peaks, and fraction whose peak count matches the truth "
-                  "(speckle inflates the first number but not the second).", "",
-                  "| separation [cells] | Truth: 2 peaks | LR: 2 peaks | CaloNSF: 2 peaks | LR matches truth | CaloNSF matches truth |",
-                  "|---|---|---|---|---|---|"]
-            for i, d in enumerate(t["shift_cells"]):
-                L.append(f"| {d} | {_f(t['gt'][i])} | {_f(t['lr'][i])} | {_f(t['sr'][i])} | "
-                         f"{_f(t.get('lr_agree', [None] * 99)[i])} | {_f(t.get('sr_agree', [None] * 99)[i])} |")
-            L.append("")
-        L += [f"Figures: `eval/x{f}/examples.png`, `eval/x{f}/observables.png`" +
-              (", `roc.png`" if m["dataset"] == "qg" else "") + (", `two_shower.png`" if "two_shower" in R else ""), ""]
-    sp = os.path.join(base, "eval", "sweep.json")
-    if os.path.exists(sp):
-        s = json.load(open(sp))
-        L += ["## Resolution sweep (above native resolution there is no truth to compare with)", "",
-              "| output shape | s/event | memory MB | energy cons. err | pooled-to-native max diff | rel. drift of energy-weighted obs. vs native |",
-              "|---|---|---|---|---|---|"]
-        for row in s["rows"]:
-            L.append(f"| {row['shape']} | {_f(row['time_s'], 3)} | {_f(row['memory_mb'], 4)} | {_f(row['energy_err'])} | "
-                     f"{_f(row['pooled_consistency'])} | {_f(row.get('obs_drift'))} |")
-        L.append("")
-        L += ["Above-native outputs are physically plausible refinements, not measurements: they are checked "
-              "only for energy conservation, consistency when pooled back to native resolution, and stability "
-              "of physics observables.", ""]
+        L += ["> Synthetic toy data: the numbers are only a pipeline check, never report them.", ""]
+    L += [f"Voxel activity threshold: {res['threshold_mev']} MeV. Reference = Geant4 HR showers of the test split; "
+          "each method super-resolves their LR version. Lower is better except precision, recall, coverage "
+          "(higher) and density (closer to 1); a classifier AUC of 0.5 means indistinguishable.", ""]
+    for f, R in res["factors"].items():
+        L += [f"## LR factor x{f}  ({R['n_events']} events, device {R.get('device', '?')})", ""]
+        have = {k for m in R["methods"].values() for k in m["classifier"]}
+        kinds = [k for k in ("dnn_low", "dnn_high", "cnn_low") if k in have]
+        head = ["method", "mean sep. power", "FPD", "KPD", *[f"AUC {k}" for k in kinds], "precision", "recall",
+                "density", "coverage", "PCC mean |Δ|"]
+        g4 = R["geant4_vs_geant4"]
+        mf = g4.get("manifold", {})
+        band_mean = {k: float(np.nanmean([*v["min"], *v["max"]])) for k, v in g4["separation_band"].items()}
+        rows = [["Geant4 vs Geant4", _f(float(np.mean(list(band_mean.values())))), _f(g4["fpd"]), _f(g4["kpd"]),
+                 *["0.5" for _ in kinds], _f(mf.get("precision")), _f(mf.get("recall")), _f(mf.get("density")),
+                 _f(mf.get("coverage")), "0"]]
+        for m, r in R["methods"].items():
+            c = r["classifier"]
+            mm = r["manifold"]
+            rows.append([NAME.get(m, m), _f(r["separation_power"]["summary"]["mean_all"]), _f(r["fpd"]),
+                         f"{_f(r['kpd'])} ± {_f(r['kpd_std'], 2)}",
+                         *[(f"{c[k]['auc_mean']:.3f} ± {c[k]['auc_std']:.3f}" if k in c else "n/a") for k in kinds],
+                         _f(mm["precision"]), _f(mm["recall"]), _f(mm["density"]), _f(mm["coverage"]),
+                         _f(r["pcc"]["mean_abs_diff"])])
+        L += _table(head, rows) + [""]
+        L += ["### Separation power per feature (mean over layers)", ""]
+        feats = [*SCALAR, "voxel_energy", *LAYERED]
+        rows = [["Geant4 vs Geant4 (mean of band)", *[_f(float(np.nanmean([*g4["separation_band"][k]["min"],
+                                                                           *g4["separation_band"][k]["max"]])), 3) for k in feats]]]
+        for m, r in R["methods"].items():
+            s = r["separation_power"]["summary"]
+            rows.append([NAME.get(m, m), *[_f(s.get(k), 3) for k in feats]])
+        L += _table(["method", *feats], rows) + [""]
+        L += ["### Generation time (seconds per shower) and parameters", ""]
+        bss = sorted({b for t in R["timing_s_per_event"].values() for b in t}, key=int)
+        rows = [[NAME.get(m, m), *[_f(t[b]["s_per_event"], 3) if b in t else "n/a" for b in bss]]
+                for m, t in R["timing_s_per_event"].items()]
+        L += _table(["method", *[f"batch {b}" for b in bss]], rows) + [""]
+        if "parameters" in R:
+            p = R["parameters"]
+            L += [f"CaloNSF parameters: {p['trainable_in_training']:,} trainable in training, "
+                  f"{p['needed_for_generation']:,} needed for generation.", ""]
+        L += ["Figures: `x%s/separation_power.png`, `histograms.png`, `pcc.png`, `summary.png`." % f, ""]
+    L += ["## Notes", "",
+          "* Histogram bin edges are 50 equal-width bins over the reference range (log10 for layer and voxel "
+          "energies), not the challenge's published reference binning; values outside are counted in the edge bins.",
+          "* The Geant4 band is the min/max over random half-splits of the single Geant4 test set (the challenge "
+          "used ten independent Geant4 datasets).",
+          "* Precision / recall / density / coverage compare the Geant4 showers of one half of the events with the "
+          "generated showers of the other half (disjoint events), because a super-resolved shower sits next to the "
+          "Geant4 shower it was made from. The `Geant4 vs Geant4` row is the same two halves of the Geant4 set.",
+          "* As the challenge does for every submission, voxels below the readout cutoff (0.5 keV / 0.033 = 15.15 keV, paper sec. 2.2) "
+          "are set to 0 for all methods before the metrics; the dropped energy is tiny, so layer energies and E_dep/E_inc stay "
+          "conserved to ~1e-6 relative and their separation power and PCC difference are ~0 for every energy-conserving method.",
+          "* Classifiers are trained per method on the Geant4 vs generated showers with a 60/20/20 split; the "
+          "multiclass (submission-vs-submission) test is not implemented.",
+          "* Timing is for super-resolving a shower from its LR input on the evaluation device, with the model "
+          "already loaded."]
     path = os.path.join(base, "eval", "report.md")
-    open(path, "w").write("\n".join(L))
+    with open(path, "w") as fh:
+        fh.write("\n".join(L) + "\n")
     return path

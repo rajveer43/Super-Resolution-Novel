@@ -6,7 +6,6 @@ Pieces and where they come from:
   * coarse-to-fine next-scale prediction, one transformer shared across scales, a scale only sees
     coarser scales (block-causal) ....................................... VAR (Tian et al.)
   * JEPA-pretrained encoder, continuous axial RoPE, progressive resolution . V-JEPA 2 (Assran et al.)
-  * conditional generation from a preprocessed LR input, denoising pipeline DiffLense (Reddy et al.)
 
 New in this work:
   * Energy-conserving split: at every step each non-empty parent cell predicts how its energy is split
@@ -113,11 +112,6 @@ class CaloNSF(nn.Module):
             self.flow = FlowHead(d, self.C, int(fl.get("mixer_layers", 1)), int(m.heads), rope, self.window)
         else:
             self.reg = nn.Sequential(nn.LayerNorm(d), nn.Linear(d, d), nn.GELU(), nn.Linear(d, self.C))
-        dn = m.get("denoise_head", "auto")
-        if dn == "auto":
-            dn = bool(cfg.data.get("noise", {}).get("enabled", False) or
-                      cfg.data.get("preprocess", {}).get("enabled", False))
-        self.denoise = nn.Sequential(nn.Linear(d, d), nn.GELU(), nn.Linear(d, 1)) if dn else None
         self.conservation = bool(m.get("conservation", True))
         self.use_occ = bool(m.get("use_occupancy", True))
         # occupancy at inference: "sample" draws each child's hit/no-hit from its predicted probability, so the
@@ -156,15 +150,6 @@ class CaloNSF(nn.Module):
         total = lr.sum(1)
         enc = self.encoder(cells, total, cond)
         return cells, enc
-
-    def _init_parents(self, cells: Cells, enc: torch.Tensor, lr: torch.Tensor, spec: ScaleSpec):
-        if self.denoise is None:
-            return lr, None
-        pred = self.denoise(enc).squeeze(-1)
-        thr = float(self.cfg.model.get("denoise_threshold", 0.0))
-        e = self.es * torch.expm1(F.relu(pred))
-        e = torch.where(pred > thr, e, torch.zeros_like(e))
-        return scatter_to_dense(cells.idx, e, cells.valid, spec.T), pred
 
     def _prep(self, dense_prev, sp: ScaleSpec, sk: ScaleSpec, step: dict, state: StepState | None,
               max_parents: int | None):
@@ -279,13 +264,6 @@ class CaloNSF(nn.Module):
             st = ladder.steps[k - 1]
 
             gts[k - 1] = ladder.specs[k - 1].to_dense({g: sum_pool(gk[g], *st[g]) for g in gk})
-        if self.denoise is not None:
-            _, pred = self._init_parents(enc_cells, enc, lr, spec0)
-            lc = spec0.to_dense(batch["lr_clean"])
-            tgt = torch.log1p(torch.gather(lc, 1, enc_cells.idx) / self.es)
-            l_den = ((pred - tgt).abs() * enc_cells.valid).sum() / enc_cells.valid.sum().clamp(min=1)
-            out["denoise"] = l_den
-            total_loss = total_loss + float(L.get("denoise", 1.0)) * l_den
         total = gts[0].sum(1)
         state = None
         maxp = cfg.model.get("max_parents_train", None)
@@ -374,7 +352,7 @@ class CaloNSF(nn.Module):
         lr = lr.repeat_interleave(E, 0)
         cond = self.conditioner(b2, B * E)
         enc_cells, enc = self._encode(lr, spec0, cond, train=False)
-        dense, _ = self._init_parents(enc_cells, enc, lr, spec0)
+        dense = lr
         total = dense.sum(1)
         scales = [dense]
         state = None

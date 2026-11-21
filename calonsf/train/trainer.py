@@ -32,13 +32,17 @@ def fit(model: torch.nn.Module, loss_fn: Callable[[dict], dict], train_loader, v
         lr: float, weight_decay: float, device, out_dir: str, schedule: str = "cosine", warmup_frac: float = 0.05,
         grad_clip: float = 1.0, max_steps_per_epoch: int | None = None, param_groups=None, log_every: int = 20,
         on_step: Callable[[int, int], None] | None = None, on_epoch: Callable[[int], None] | None = None,
-        tag: str = "train", save_extra: Callable[[], dict] | None = None) -> dict:
+        tag: str = "train", save_extra: Callable[[], dict] | None = None, decay_frac: float = 0.2,
+        val_metric: Callable[[], float] | None = None) -> dict:
+    """decay_frac: share of the steps spent in the linear LR decay of the `wcd` schedule. val_metric: optional
+    callable returning a number to MINIMISE (e.g. a CaloChallenge separation power); when given it, not the
+    validation loss, selects best.pt, and it is logged as val_metric."""
     os.makedirs(out_dir, exist_ok=True)
     params = param_groups or [p for p in model.parameters() if p.requires_grad]
     opt = torch.optim.AdamW(params, lr=lr, weight_decay=weight_decay)
     steps_per_epoch = len(train_loader) if max_steps_per_epoch is None else min(len(train_loader), max_steps_per_epoch)
     total = max(1, epochs * steps_per_epoch)
-    sched = torch.optim.lr_scheduler.LambdaLR(opt, lr_lambda(schedule, total, int(total * warmup_frac)))
+    sched = torch.optim.lr_scheduler.LambdaLR(opt, lr_lambda(schedule, total, int(total * warmup_frac), decay_frac))
     csv = CSVLogger(os.path.join(out_dir, f"{tag}_log.csv"))
     last = os.path.join(out_dir, "last.pt")
     start_epoch, step, best = 0, 0, float("inf")
@@ -83,16 +87,20 @@ def fit(model: torch.nn.Module, loss_fn: Callable[[dict], dict], train_loader, v
                 log.info(f"[{tag}] ep {epoch} it {i + 1}/{steps_per_epoch} lr {sched.get_last_lr()[0]:.2e} {msg}")
         tr = {f"train_{k}": v / max(1, min(steps_per_epoch, i + 1)) for k, v in run.items()}
         val = evaluate_loss(model, loss_fn, val_loader, device, max_steps=max(10, (max_steps_per_epoch or 10**9) // 4))
+        crit = val.get("loss", float("inf"))
+        if val_metric is not None:
+            val["metric"] = float(val_metric())
+            crit = val["metric"]
         row = {"epoch": epoch, "step": step, "time_s": time.time() - t0, **tr, **{f"val_{k}": v for k, v in val.items()}}
         csv.log(row)
         log.info(f"[{tag}] epoch {epoch} done in {row['time_s']:.0f}s  train_loss={tr.get('train_loss', float('nan')):.4f}"
-                 f"  val_loss={val.get('loss', float('nan')):.4f}")
+                 f"  val_loss={val.get('loss', float('nan')):.4f}" + (f"  val_metric={val['metric']:.4f}" if "metric" in val else ""))
         extra = save_extra() if save_extra else {}
         ck = {"model": model.state_dict(), "opt": opt.state_dict(), "sched": sched.state_dict(), "epoch": epoch,
               "step": step, "best": best, "tag": tag, **extra}
         torch.save(ck, last)
-        if val.get("loss", float("inf")) <= best:
-            best = val["loss"]
+        if crit <= best:
+            best = crit
             ck["best"] = best
             torch.save({"model": model.state_dict(), "epoch": epoch, **extra}, os.path.join(out_dir, "best.pt"))
     if not os.path.exists(os.path.join(out_dir, "best.pt")):

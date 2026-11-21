@@ -11,20 +11,17 @@ source "$RUN_ENV"
 source "$REPO/slurm/common.sh"
 load_settings
 setup_python
-# calogan_noisy -> calogan_synthetic
 CONFIG_NAME="${CONFIG_NAME%%_*}_synthetic"
 CONFIG="configs/experiments/${CONFIG_NAME}.yaml"
 EXTRA_SET="train.max_steps_per_epoch=40 eval.lr_factors=[2]"
 job_header "smoke test"
 
 cd "$REPO"
-python scripts/make_synthetic.py --n-qg 400 --n-calogan 400 --n-cc 400
+python scripts/make_synthetic.py --n-cc 400
 run_py pretrain_jepa.py
 run_py train_sr.py
-run_py train_baseline.py --name all
-run_py train_downstream.py
 run_py evaluate.py
-run_py resolution_sweep.py
+run_py beyond_native.py
 
 exp="$(experiment_dir)"
 missing=0
@@ -39,10 +36,9 @@ check() {
 echo "checking outputs in $exp"
 check "$exp/jepa/encoder.pt"
 check "$exp/sr/best.pt"
-check "$exp/baselines/edsr_x*/best.pt"
-check "$exp/downstream/task/best.pt"
 check "$exp/eval/metrics.json"
-check "$exp/eval/sweep.json"
 check "$exp/eval/report.md"
+check "$exp/eval/x*/separation_power.png"
+check "$exp/beyond_native/report.md"
 ((missing == 0)) || die "smoke test finished but outputs are missing (see above)"
 echo "SMOKE OK"

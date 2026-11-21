@@ -5,7 +5,7 @@ out_dir: runs
 exp_name: default
 
 data:
-  name: qg
+  name: calochallenge
   files: []
   split: {train: 0.8, val: 0.1, test: 0.1}
   max_events: null    # cap the number of events (laptop-friendly); null = all
@@ -14,17 +14,6 @@ data:
   batch_size: 16
   num_workers: 0
   energy_scale: 1.0   # E_scale in log1p(E / E_scale)
-  noise:              # electronic noise on LR cells (Graph Denoising paper Sec. II)
-    enabled: false
-    sigma: {default: 0.0}
-    threshold_k: 2.0
-  preprocess:         # DiffLense LR preprocessing: median -> gaussian -> NLM -> threshold
-    enabled: false
-    median: true
-    gaussian_sigma: 0.5
-    nlm: true
-    nlm_h: 0.6
-    threshold_rel: 0.02
 
 model:
   d_model: 128
@@ -49,21 +38,20 @@ model:
   occ_mode: sample          # sample | threshold (occupancy at inference; threshold biases the number of zeros)
   occ_threshold: 0.5        # used only when occ_mode=threshold
   above_native_occupancy: keep   # keep | sample: above native resolution keep every sub-cell (smooth split)
-  denoise_head: auto        # auto -> on iff noise or preprocessing is enabled
-  denoise_threshold: 0.0
   flow: {mixer_layers: 1, y_std: 3.0, eps: 1.0e-4, sigma_min: 1.0e-4, nfe: 16, solver: midpoint}
-  conditioning: {incident_energy: false, particle: false, e_min: 1.0, e_max: 100.0}
+  conditioning: {incident_energy: false, particle: false, e_min: 1000.0, e_max: 1000000.0}
 
 loss:
   occ: 1.0
-  denoise: 1.0
   profile: 0.5
   jepa: 0.05
   jepa_max_parents: 256
 
 jepa:
-  epochs: 5
-  lr: 5.0e-4
+  epochs: 30                 # the previous 15-epoch run was still improving fast when it stopped
+  lr: 2.0e-4                # 5e-4 was unstable right after warmup and left a long noisy plateau
+  warmup_frac: 0.05         # of all steps; keep it >= 1 epoch
+  decay_frac: 0.4           # share of the steps in the final linear LR decay (most of the gain came from it)
   batch_size: 16
   ema: [0.996, 1.0]
   n_blocks: 4
@@ -89,46 +77,36 @@ train:
   encoder_lr_mult: 0.2
   log_every: 20
   pretrained_encoder: auto  # auto -> runs/<exp>/jepa/encoder.pt if it exists; null to disable
+  select_events: 0          # > 0: pick best.pt by the mean separation power of this many validation showers (lower is better)
+  select_bins: 20           # histogram bins of that metric (few, because only a few hundred showers are used)
 
-baseline:
-  epochs: 10
-  lr: 3.0e-4
-  channels: 48
-  blocks: 6
-  project_energy: true      # rescale output so each LR cell's children sum to the LR cell
-  ddpm_steps: 1000
-  ddpm_sample_steps: 50
-  graphfm_nfe: 16
-  vq_codebook: 256
-  vq_dim: 32
-  vq_stage1_frac: 0.5
-
-downstream:
-  epochs: 8
-  lr: 1.0e-3
-  batch_size: 64
-  probe_epochs: 5
-
-tune:                       # Optuna study for the CaloNSF training hyperparameters (scripts/tune.py)
-  trials: 15                # total, including the default config (trial 0); hard cap 15
-  epochs: 2                 # short training per trial
-  steps_per_epoch: 500
-  val_events: 500           # scored on the validation split, never on test
-  nfe: 8
-  startup_trials: 5         # random trials before the TPE sampler takes over
-
+# CaloChallenge Dataset 2 evaluation (scripts/evaluate.py); also lr_factors is read by scripts/super_resolve.py
 eval:
-  n_events: 500
-  batch_size: 8
-  ensemble: 4
+  lr_factors: [4]
+  n_events: null              # null = the whole test split (100 000 Geant4 showers in dataset_2_2)
+  batch_size: 16              # generation batch size
   nfe: 16
   solver: midpoint
-  lr_factors: [4]
-  baselines: [nearest, bicubic, edsr, rcan, swinir, liif, ddpm, graphfm, varvq]
-  n_examples: 4
-  sweep_extra_steps: [0, 1, 2, 3, 4]
-  sweep_events: 4
-
-analysis:
-  energy_bins: null
-  class_names: null
+  baselines: [nearest, bicubic]
+  threshold_mev: 0.01515      # voxel activity threshold for the sparsity: Par04 stores nothing below 0.5 keV = 0.5 keV / 0.033 = 15.15 keV (challenge paper, sec. 2.2)
+  n_bins: 50                  # histogram bins of the separation power
+  band_pairs: 10              # random Geant4 half-splits for the grey band / floors
+  kpd_batch: 10000
+  manifold: {events: 10000, k: 5}
+  classifier:                 # binary classifier test, sizes as in the challenge
+    run: [dnn_low, dnn_high, cnn_low]
+    seeds: 10
+    dnn_epochs: 50
+    cnn_epochs: 48
+    dnn_lr: 2.0e-4
+    cnn_lr: 2.5e-5
+    dnn_batch: 1000
+    cnn_batch: 256
+  timing: {batch_sizes: [1, 100], events: 200}
+  beyond_native:              # scripts/beyond_native.py: consistency checks above the native 16 x 9 grid
+    sizes: [256, 512, 1024, 2048]   # Cartesian N x N images (x = eta, y = phi); add 4096 ... as memory allows
+    n_events: 8
+    samples: 4                # sub-sample points per axis when resampling polar cells onto pixels
+    factor: null              # null = eval.lr_factors[0]
+    images: 2                 # sample images (ladder + zoom) for the first N showers
+    zoom_mm: 10.0             # half-width of the zoom window around the centre of energy

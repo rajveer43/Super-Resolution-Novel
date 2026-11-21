@@ -1,8 +1,7 @@
-from .base import SRBaseline, project_energy
-from .cnn import EDSR, LIIF, RCAN, Bicubic, Nearest, SwinIR
-from .generative import DDPM, VARVQ, GraphFM
+"""Non-trainable reference upsamplers: nearest-neighbour repetition and bicubic interpolation."""
+from .interpolation import Bicubic, Nearest, SRBaseline, project_energy
 
-REGISTRY = {c.name: c for c in [Nearest, Bicubic, EDSR, RCAN, SwinIR, LIIF, DDPM, GraphFM, VARVQ]}
+REGISTRY = {c.name: c for c in (Nearest, Bicubic)}
 
 
 def make_baseline(name: str, cfg, geom, factor: int) -> SRBaseline:

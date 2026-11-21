@@ -84,17 +84,13 @@ def test_ablation_variants_run(cfg):
         m.eval().generate(batch, nfe=1)
 
 
-def test_baselines_shapes(cfg):
+def test_baselines_conserve_energy(cfg):
     f = int(cfg.eval.lr_factors[0])
     geom, batch = _batch(cfg, f)
-    cfg.baseline["ddpm_sample_steps"] = 2
-    cfg.baseline["graphfm_nfe"] = 1
+    assert set(REGISTRY) == {"nearest", "bicubic"}
     for name in REGISTRY:
-        b = make_baseline(name, cfg, geom, f)
-        if b.trainable:
-            if hasattr(b, "set_epoch"):
-                b.set_epoch(0, 2)
-            b.loss(batch)["loss"].backward()
-        p = b.predict(batch)
+        p = make_baseline(name, cfg, geom, f).predict(batch)
         for g in p:
-            assert p[g].shape == batch["hr"][g].shape
+            assert p[g].shape == batch["hr"][g].shape and (p[g] >= 0).all()
+            assert torch.allclose(sum_pool(p[g], *make_baseline(name, cfg, geom, f).factors[g]), batch["lr"][g],
+                                  rtol=1e-4, atol=1e-5)

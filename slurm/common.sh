@@ -34,7 +34,7 @@ log_dir() { echo "$ROOT/logs/$EXPERIMENT"; }
 
 # For scripts run by hand after submission: load the frozen settings of one experiment.
 #   load_experiment ""        the most recently submitted one
-#   load_experiment <name>    that one, e.g. 2026-11-05_calogan_full
+#   load_experiment <name>    that one, e.g. 2026-11-05_calochallenge_full
 load_experiment() {
     local f
     if [[ -n "${1:-}" ]]; then
@@ -113,13 +113,6 @@ run_py() {
     shift
     local -a extra=()
     [[ -n "$EXTRA_SET" ]] && read -r -a extra <<< "$EXTRA_SET"
-    # stages that build CaloNSF (sr, eval, sweep) set USE_TUNED=1: the Optuna result, if any, wins over EXTRA_SET
-    local tuned="$(experiment_dir)/tune/best_overrides.txt"
-    if [[ "${USE_TUNED:-0}" == 1 && -f "$tuned" ]]; then
-        local line
-        while read -r line; do [[ -n "$line" ]] && extra+=("$line"); done < "$tuned"
-        echo "using tuned hyperparameters from $tuned"
-    fi
     local -a cmd=(python "scripts/$script" --config "$CONFIG" "$@"
                   -o "out_dir=$ROOT/runs" "exp_name=$EXPERIMENT" ${extra[@]+"${extra[@]}"})
     cd "$REPO"
@@ -129,14 +122,3 @@ run_py() {
     "${cmd[@]}"
     echo "-- $script finished in $(((SECONDS - t0) / 60)) min"
 }
-
-# Baseline training tasks, one line "<name> <factor>" per array task: every baseline the evaluation
-# compares against (eval.baselines) at every evaluated LR factor (eval.lr_factors).
-baseline_tasks() {
-    local -a extra=()
-    [[ -n "$EXTRA_SET" ]] && read -r -a extra <<< "$EXTRA_SET"
-    (cd "$REPO" && python -c "import sys; from calonsf.utils.config import load_config; \
-c = load_config(sys.argv[1], sys.argv[2:]); \
-[print(n, f) for f in c.eval.lr_factors for n in c.eval.baselines]" "$CONFIG" ${extra[@]+"${extra[@]}"})
-}
-baseline_task() { baseline_tasks | sed -n "$(($1 + 1))p"; }

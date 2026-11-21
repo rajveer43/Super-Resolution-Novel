@@ -1,5 +1,5 @@
 """Build CaloNSF for SR training: JEPA encoder, perceptual loss, optimiser groups, encoder freeze.
-Shared by scripts/train_sr.py and scripts/tune.py so both train exactly the same way."""
+Shared by the SR training entry points."""
 from __future__ import annotations
 
 import os

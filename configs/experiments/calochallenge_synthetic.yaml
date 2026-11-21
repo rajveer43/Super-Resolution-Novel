@@ -4,6 +4,15 @@ exp_name: calochallenge_synthetic
 data: {files: [data/synthetic/dataset_2_1.hdf5, data/synthetic/dataset_2_2.hdf5]}
 train: {epochs: 3, max_steps_per_epoch: 60}
 jepa: {epochs: 2}
-baseline: {epochs: 2}
-downstream: {epochs: 4, probe_epochs: 3}
-eval: {n_events: 96, ensemble: 2, nfe: 8, sweep_events: 2}
+eval:
+  lr_factors: [2]
+  n_events: 96
+  batch_size: 16
+  nfe: 4
+  n_bins: 20
+  band_pairs: 3
+  kpd_batch: 48
+  manifold: {events: 48, k: 3}
+  classifier: {seeds: 2, dnn_epochs: 3, cnn_epochs: 2, dnn_batch: 32, cnn_batch: 32}
+  timing: {batch_sizes: [1, 8], events: 16}
+  beyond_native: {sizes: [48, 96], n_events: 2, samples: 3, images: 1, zoom_mm: 20.0}

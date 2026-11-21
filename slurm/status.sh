@@ -3,7 +3,7 @@
 # end of each stage's newest log.
 #
 #   bash slurm/status.sh                 the most recently submitted experiment
-#   bash slurm/status.sh <experiment>    a given one, e.g. 2026-11-05_calogan_full
+#   bash slurm/status.sh <experiment>    a given one, e.g. 2026-11-05_calochallenge_full
 set -uo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=common.sh
@@ -25,11 +25,9 @@ fi
 
 echo
 echo "---- finished stages"
-for m in jepa tune sr downstream eval sweep; do
+for m in jepa sr eval; do
     if [[ -f "$exp/.done_$m" ]]; then echo "done    $m  ($(cat "$exp/.done_$m"))"; else echo "-       $m"; fi
 done
-n_done=$(compgen -G "$exp/.done_baseline-*" | wc -l | tr -d ' ')
-echo "        baselines finished: $n_done  ($(compgen -G "$exp/.done_baseline-*" | sed 's/.*\.done_baseline-//' | paste -sd' ' -))"
 
 echo
 echo "---- latest epoch lines"
@@ -41,7 +39,7 @@ done
 
 echo
 echo "---- end of the latest log of each stage ($logdir)"
-for stage in jepa tune sr baselines downstream eval sweep smoke; do
+for stage in jepa sr eval smoke; do
     # shellcheck disable=SC2012
     f="$(ls -t "$logdir/$stage"-*.out 2> /dev/null | head -1)"
     [[ -n "$f" ]] || continue
@@ -50,7 +48,6 @@ for stage in jepa tune sr baselines downstream eval sweep smoke; do
 done
 grep -l -i -E "traceback|error:|out of memory|DUE TO TIME LIMIT" "$logdir"/*.out 2> /dev/null \
     | sed 's/^/!! problem reported in /'
-[[ -f "$exp/tune/best_overrides.txt" ]] && echo && echo "tuned hyperparameters: $(paste -sd' ' "$exp/tune/best_overrides.txt")"
 [[ -f "$exp/eval/report.md" ]] && echo && echo "report: $exp/eval/report.md"
 compgen -G "$ROOT/results_${EXPERIMENT}*.tar.gz" > /dev/null && echo "packed: $(ls "$ROOT"/results_"${EXPERIMENT}"*.tar.gz)"
 exit 0

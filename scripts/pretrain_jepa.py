@@ -38,7 +38,8 @@ def on_epoch(epoch):
 
 
 fit(model, model.loss, tr, va, epochs=epochs, lr=float(j.lr), weight_decay=float(cfg.train.weight_decay),
-    device=device, out_dir=out, schedule="wcd", warmup_frac=float(cfg.train.warmup_frac),
+    device=device, out_dir=out, schedule="wcd", warmup_frac=float(j.get("warmup_frac", cfg.train.warmup_frac)),
+    decay_frac=float(j.get("decay_frac", 0.2)),
     grad_clip=float(cfg.train.grad_clip), max_steps_per_epoch=cfg.train.get("max_steps_per_epoch"),
     on_step=on_step, on_epoch=on_epoch, tag="jepa", log_every=int(cfg.train.log_every))
 torch.save(model.state_dict(), os.path.join(out, "encoder.pt"))

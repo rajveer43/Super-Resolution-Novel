@@ -1,7 +1,7 @@
 """Tiny YAML config system with `_base_` inheritance and dotted CLI overrides.
 
 Example:
-    cfg = load_config("configs/experiments/qg.yaml", ["train.epochs=2", "model.d_model=128"])
+    cfg = load_config("configs/experiments/calochallenge.yaml", ["train.epochs=2", "model.d_model=128"])
     cfg.train.epochs  # -> 2
 """
 from __future__ import annotations
