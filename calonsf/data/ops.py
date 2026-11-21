@@ -18,6 +18,25 @@ def pool_grids(grids: dict, factors: dict) -> dict:
     return {g: sum_pool(x, *factors[g]) for g, x in grids.items()}
 
 
+def threshold_cells(x: torch.Tensor, fu: int, fv: int, thr: float) -> torch.Tensor:
+    """Readout threshold for generated showers: cells with 0 < E < thr are zeroed and their energy goes to
+    the largest remaining cell of the same LR block (fu x fv), so every block sum, and so the total energy
+    and the match to the LR input, stays exact. A block with no cell above thr keeps all its energy in its
+    largest cell."""
+    if thr <= 0:
+        return x
+    B, n, H, W = x.shape
+    h, w = H // fu, W // fv
+    xb = x.reshape(B, n, h, fu, w, fv).permute(0, 1, 2, 4, 3, 5).reshape(B, n, h, w, fu * fv)
+    small = (xb > 0) & (xb < thr)
+    moved = (xb * small).sum(-1, keepdim=True)
+    keep = torch.where(small, torch.zeros_like(xb), xb)
+    has = keep.sum(-1, keepdim=True) > 0
+    recv = torch.where(has, keep, xb).argmax(-1, keepdim=True)
+    keep = keep.scatter_add(-1, recv, moved)
+    return keep.reshape(B, n, h, w, fu, fv).permute(0, 1, 2, 4, 3, 5).reshape(B, n, H, W)
+
+
 def repeat_upsample(x: torch.Tensor, fu: int, fv: int, conserve: bool = True) -> torch.Tensor:
     """Nearest-neighbour upsampling ("upsampling by repetition", Graph Denoising paper).
     With conserve=True each child gets parent/(fu*fv) so the total energy is unchanged."""

@@ -27,7 +27,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from ..data.geometry import Geometry, ScaleSpec, build_ladder, children_index, parent_index
-from ..data.ops import sum_pool
+from ..data.ops import sum_pool, threshold_cells
 from ..data.tokens import Cells, cells_from_dense, cells_from_idx, scatter_to_dense
 from .blocks import Block, TimeEmbed
 from .encoder import CellEmbed, CellEncoder, Conditioner, make_rope
@@ -400,6 +400,11 @@ class CaloNSF(nn.Module):
             return x.mean(1), (x.std(1) if E > 1 else torch.zeros_like(x[:, 0]))
 
         spec_f = ladder.specs[-1]
+        thr = float(self.cfg.model.get("min_cell_energy", 0.0))
+        if thr > 0:  # detector readout threshold (MeV), applied per sample before the ensemble mean
+            gf, g0 = spec_f.to_grids(dense), spec0.to_grids(lr)
+            dense = spec_f.to_dense({g: threshold_cells(v, v.shape[-2] // g0[g].shape[-2], v.shape[-1] // g0[g].shape[-1],
+                                                        thr) for g, v in gf.items()})
         mean, std = agg(dense)
         out = {"grids": spec_f.to_grids(mean), "std": spec_f.to_grids(std), "ladder": ladder, "spec": spec_f,
                "lr_init": spec0.to_grids(agg(scales[0])[0])}
